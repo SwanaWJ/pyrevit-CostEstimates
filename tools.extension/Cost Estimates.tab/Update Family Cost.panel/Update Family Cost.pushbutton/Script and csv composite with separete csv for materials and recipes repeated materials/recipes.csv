@@ -1,0 +1,7 @@
+Type,Component,Quantity
+Wall-190mm-Block,Block_190mm,12
+Wall-190mm-Block,Cement_50kg,0.08
+Wall-190mm-Block,RiverSand_m3,0.05
+C25 Concrete,Cement_50kg_m3,12
+C25 Concrete,Fine Aggregates_m3,0.08
+C25 Concrete,Corse Aggregates_m3,0.05

@@ -1,0 +1,4 @@
+name: CostEstimates
+author: Wachama J. Swana
+description: Revit BOQ automation tools - generates BOQ, updates family costs, and computes totals.
+tags: [boq, pyrevit, cost, estimation]
