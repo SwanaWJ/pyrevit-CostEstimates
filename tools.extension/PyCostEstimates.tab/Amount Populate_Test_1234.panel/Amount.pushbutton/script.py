@@ -12,11 +12,11 @@ FT3_TO_M3 = 0.0283168
 FT2_TO_M2 = 0.092903
 FT_TO_M = 0.3048
 
-# Exact material names
+# Exact material names for structural columns
 CONCRETE_NAME = "Concrete - Cast-in-Place Concrete"
 STEEL_NAME = "Metal - Steel 43-275"
 
-# Default category logic
+# Method of cost calculation by category
 category_methods = {
     DB.BuiltInCategory.OST_Doors: "count",
     DB.BuiltInCategory.OST_Windows: "count",
@@ -24,16 +24,20 @@ category_methods = {
     DB.BuiltInCategory.OST_StructuralFoundation: "volume",
     DB.BuiltInCategory.OST_Floors: "volume",
     DB.BuiltInCategory.OST_Walls: "area",
-    DB.BuiltInCategory.OST_Roofs: "area"
-    # StructuralColumns handled separately
+    DB.BuiltInCategory.OST_Roofs: "area",
+    DB.BuiltInCategory.OST_Ceilings: "area",  # ✅ Ceilings now included
+    DB.BuiltInCategory.OST_Conduit: "length",
+    DB.BuiltInCategory.OST_LightingFixtures: "count",
+    DB.BuiltInCategory.OST_LightingDevices: "count",
+    DB.BuiltInCategory.OST_ElectricalFixtures: "count",
 }
 
-# Collect elements
+# Collect all elements by category
 elements = []
-for cat in category_methods.keys() + [DB.BuiltInCategory.OST_StructuralColumns]:
-    elements += DB.FilteredElementCollector(doc)\
-                 .OfCategory(cat)\
-                 .WhereElementIsNotElementType()\
+for cat in list(category_methods.keys()) + [DB.BuiltInCategory.OST_StructuralColumns]:
+    elements += DB.FilteredElementCollector(doc) \
+                 .OfCategory(cat) \
+                 .WhereElementIsNotElementType() \
                  .ToElements()
 
 # Begin transaction
@@ -49,7 +53,7 @@ for elem in elements:
         if not category:
             raise Exception("Missing category")
 
-        # Structural Columns: material-based method
+        # Structural Columns: check material
         if category.Id.IntegerValue == int(DB.BuiltInCategory.OST_StructuralColumns):
             mat_param = elem.LookupParameter("Structural Material")
             if not mat_param:
@@ -65,12 +69,7 @@ for elem in elements:
                 raise Exception("Unsupported material: '{}'".format(mat_name))
 
         else:
-            # Use default category-based method
-            method = None
-            for bic, logic in category_methods.items():
-                if category.Id.IntegerValue == int(bic):
-                    method = logic
-                    break
+            method = category_methods.get(DB.BuiltInCategory(category.Id.IntegerValue))
             if not method:
                 raise Exception("Unrecognized category")
 
@@ -83,7 +82,7 @@ for elem in elements:
             raise Exception("Missing or read-only parameter")
 
         cost_val = cost_param.AsDouble()
-        factor = 1.0  # fallback for count
+        factor = 1.0  # default for 'count'
 
         if method == "volume":
             vol_param = elem.LookupParameter("Volume")
@@ -103,7 +102,7 @@ for elem in elements:
                 factor = len_param.AsDouble() * FT_TO_M
             else:
                 raise Exception("No length data")
-        # count uses factor = 1
+        # count = 1 (default)
 
         result = cost_val * factor
         target_param.Set(result)
