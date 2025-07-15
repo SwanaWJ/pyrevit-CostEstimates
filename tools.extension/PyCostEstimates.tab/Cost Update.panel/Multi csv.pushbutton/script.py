@@ -133,6 +133,10 @@ with revit.Transaction("Set Composite Costs from CSV"):
     .WhereElementIsElementType()
 
     apply_cost_to_elements(electrical_equipment_types, DB.BuiltInCategory.OST_ElectricalEquipment)
+
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol),
+                           DB.BuiltInCategory.OST_PlumbingFixtures)
+
 # --- Summary ---
 summary = ""
 

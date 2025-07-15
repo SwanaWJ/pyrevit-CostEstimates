@@ -32,7 +32,8 @@ category_methods = {
     DB.BuiltInCategory.OST_ElectricalFixtures: "count",
     DB.BuiltInCategory.OST_ElectricalEquipment: "count",
     DB.BuiltInCategory.OST_GenericModel: "area",
-    DB.BuiltInCategory.OST_Rebar: "length",  # ✅ Now included with special handling
+    DB.BuiltInCategory.OST_Rebar: "length",  # ✅ Special handling
+    DB.BuiltInCategory.OST_PlumbingFixtures: "count",  # ✅ NEW
 }
 
 # Collect all elements by category

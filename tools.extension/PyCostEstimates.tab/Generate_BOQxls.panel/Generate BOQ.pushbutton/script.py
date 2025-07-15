@@ -27,6 +27,7 @@ CATEGORY_MAP = {
     "Roofs": DB.BuiltInCategory.OST_Roofs,
     "Ceilings": DB.BuiltInCategory.OST_Ceilings,
     "Wall and Floor Finishes": DB.BuiltInCategory.OST_GenericModel,
+    "Plumbing Fixtures": DB.BuiltInCategory.OST_PlumbingFixtures,  # ✅ NEW
     "Electrical": [
         DB.BuiltInCategory.OST_Conduit,
         DB.BuiltInCategory.OST_LightingFixtures,
@@ -52,6 +53,7 @@ CATEGORY_DESCRIPTIONS = {
     "Roofs": "0.5mm IBR/IT4 Pre-painted roof sheeting fixed to purlins with appropriate screws, complete with ridge capping, barge boards, insulation and accessories.",
     "Ceilings": "Particle board ceilings (to BS EN 312...) and PVC tongue-and-groove ceiling panels...",
     "Wall and Floor Finishes": "British Standards for wall and floor finishes—primarily BS 5385, BS 8203, and BS 5325—establish best practices...",
+    "Plumbing Fixtures": "Sanitary appliances including WC pans, flush tanks, wash basins, sinks and urinals, complete with all brackets, traps, overflows, isolating valves, fixings and connections to water supply and waste systems, conforming to BS EN 997, BS EN 14688, and BS EN 695.",
     "Electrical": "Steel conduits to BS 4568-1... Armoured cables to SANS 1507... IP-rated junction boxes and fittings..."
 }
 
