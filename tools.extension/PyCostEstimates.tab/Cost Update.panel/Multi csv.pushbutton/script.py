@@ -26,7 +26,7 @@ if os.path.isdir(csv_folder_path):
                         try:
                             name = row["Item"].strip()
                             unit_cost = float(row["UnitCost"])
-                            material_prices[name] = unit_cost  # Later files override earlier entries
+                            material_prices[name] = unit_cost
                         except:
                             continue
                     loaded_files.append(filename)
@@ -90,7 +90,7 @@ with revit.Transaction("Set Composite Costs from CSV"):
                     else:
                         skipped.append("{0} (no editable 'Cost' parameter)".format(type_name))
 
-    # Apply cost to major categories
+    # Original categories...
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.WallType), DB.BuiltInCategory.OST_Walls)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FloorType), DB.BuiltInCategory.OST_Floors)
 
@@ -108,34 +108,23 @@ with revit.Transaction("Set Composite Costs from CSV"):
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_Doors)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_Windows)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.Structure.RebarBarType), DB.BuiltInCategory.OST_Rebar, name_param=False)
-    switch_types = DB.FilteredElementCollector(revit.doc) \
-        .OfCategory(DB.BuiltInCategory.OST_LightingDevices) \
-        .WhereElementIsElementType()
-
-    apply_cost_to_elements(switch_types, DB.BuiltInCategory.OST_LightingDevices)
-
-    lighting_fixture_types = DB.FilteredElementCollector(revit.doc) \
-        .OfCategory(DB.BuiltInCategory.OST_LightingFixtures) \
-        .WhereElementIsElementType()
-
-    apply_cost_to_elements(lighting_fixture_types, DB.BuiltInCategory.OST_LightingFixtures)
-
-    # ✅ NEW: Apply to Electrical Fixtures (e.g. Lighting Switches)
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_LightingDevices).WhereElementIsElementType(), DB.BuiltInCategory.OST_LightingDevices)
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_LightingFixtures).WhereElementIsElementType(), DB.BuiltInCategory.OST_LightingFixtures)
     switch_types = DB.FilteredElementCollector(revit.doc) \
         .OfCategory(DB.BuiltInCategory.OST_ElectricalFixtures) \
         .WhereElementIsElementType()
-
     apply_cost_to_elements(switch_types, DB.BuiltInCategory.OST_ElectricalFixtures)
-
-# ✅ NEW: Apply to Electrical Equipment (e.g. Distribution Boards)
     electrical_equipment_types = DB.FilteredElementCollector(revit.doc) \
-    .OfCategory(DB.BuiltInCategory.OST_ElectricalEquipment) \
-    .WhereElementIsElementType()
-
+        .OfCategory(DB.BuiltInCategory.OST_ElectricalEquipment) \
+        .WhereElementIsElementType()
     apply_cost_to_elements(electrical_equipment_types, DB.BuiltInCategory.OST_ElectricalEquipment)
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_PlumbingFixtures)
 
-    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol),
-                           DB.BuiltInCategory.OST_PlumbingFixtures)
+    # === ✅ NEW: Add Pipes ===
+    pipe_types = DB.FilteredElementCollector(revit.doc) \
+        .OfCategory(DB.BuiltInCategory.OST_PipeCurves) \
+        .WhereElementIsElementType()
+    apply_cost_to_elements(pipe_types, DB.BuiltInCategory.OST_PipeCurves)
 
 # --- Summary ---
 summary = ""
@@ -149,8 +138,7 @@ if skipped:
     summary += "\n⚠️ Skipped Types:\n" + "\n".join(skipped)
 
 if missing_materials:
-    summary += "\n\n❗Missing materials not found in loaded CSVs:\n"
-    summary += "\n".join(sorted(missing_materials))
+    summary += "\n\n❗Missing materials not found in loaded CSVs:\n" + "\n".join(sorted(missing_materials))
 
 if loaded_files:
     summary += "\n\n📂 Loaded CSV files:\n" + "\n".join(loaded_files)

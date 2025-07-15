@@ -23,11 +23,14 @@ CATEGORY_MAP = {
     "Structural Foundations": DB.BuiltInCategory.OST_StructuralFoundation,
     "Structural Framing": DB.BuiltInCategory.OST_StructuralFraming,
     "Structural Columns": DB.BuiltInCategory.OST_StructuralColumns,
-    "Structural Rebar": DB.BuiltInCategory.OST_Rebar,  # ✅ NEW
+    "Structural Rebar": DB.BuiltInCategory.OST_Rebar,
     "Roofs": DB.BuiltInCategory.OST_Roofs,
     "Ceilings": DB.BuiltInCategory.OST_Ceilings,
     "Wall and Floor Finishes": DB.BuiltInCategory.OST_GenericModel,
-    "Plumbing Fixtures": DB.BuiltInCategory.OST_PlumbingFixtures,  # ✅ NEW
+    "Plumbing": [
+        DB.BuiltInCategory.OST_PlumbingFixtures,
+        DB.BuiltInCategory.OST_PipeCurves
+    ],
     "Electrical": [
         DB.BuiltInCategory.OST_Conduit,
         DB.BuiltInCategory.OST_LightingFixtures,
@@ -53,8 +56,11 @@ CATEGORY_DESCRIPTIONS = {
     "Roofs": "0.5mm IBR/IT4 Pre-painted roof sheeting fixed to purlins with appropriate screws, complete with ridge capping, barge boards, insulation and accessories.",
     "Ceilings": "Particle board ceilings (to BS EN 312...) and PVC tongue-and-groove ceiling panels...",
     "Wall and Floor Finishes": "British Standards for wall and floor finishes—primarily BS 5385, BS 8203, and BS 5325—establish best practices...",
-    "Plumbing Fixtures": "Sanitary appliances including WC pans, flush tanks, wash basins, sinks and urinals, complete with all brackets, traps, overflows, isolating valves, fixings and connections to water supply and waste systems, conforming to BS EN 997, BS EN 14688, and BS EN 695.",
-    "Electrical": "Steel conduits to BS 4568-1... Armoured cables to SANS 1507... IP-rated junction boxes and fittings..."
+    "Plumbing": (
+        "Sanitary appliances including WC pans, flush tanks, wash basins, sinks and urinals, complete with all fixings, traps and connections; "
+        "and cold/hot water pipework inclusive of fittings, jointing and testing."
+    ),
+    "Electrical": "Steel conduits to BS 4568‑1... Armoured cables to SANS 1507... IP‑rated junction boxes and fittings..."
 }
 
 # --- Unit conversions ---
@@ -88,12 +94,10 @@ fmt_section = col_fmt(bold=True)
 fmt_money = col_fmt(num_fmt='#,##0.00')
 fmt_normal = col_fmt()
 
-# --- Column Titles ---
+# --- Column Titles & Widths ---
 headers = ["ITEM", "DESCRIPTION", "UNIT", "QTY", "RATE (ZMW)", "AMOUNT (ZMW)"]
 for col, header in enumerate(headers):
     sheet.write(0, col, header, fmt_header)
-
-# --- Column widths ---
 sheet.set_column(1, 1, 45)
 sheet.set_column(4, 4, 12)
 sheet.set_column(5, 5, 16)
@@ -128,66 +132,71 @@ for category_name, bic in CATEGORY_MAP.items():
             qty = 1.0
             unit = "No."
 
-            # Quantity logic
+            # --- Updated Plumbing and Remaining Logic ---
             if category_name in ["Doors", "Windows"]:
                 qty = 1
-            elif category_name in ["Walls", "Roofs", "Ceilings", "Wall and Floor Finishes"]:
-                area_param = el.LookupParameter("Area")
-                if area_param and area_param.HasValue:
-                    qty = area_param.AsDouble() * FT2_TO_M2
+            elif category_name in ["Wall and Floor Finishes", "Roofs", "Ceilings"]:
+                area = el.LookupParameter("Area")
+                if area and area.HasValue:
+                    qty = area.AsDouble() * FT2_TO_M2
                     unit = "m²"
             elif category_name == "Structural Foundations":
-                vol_param = el.LookupParameter("Volume")
-                if vol_param and vol_param.HasValue:
-                    qty = vol_param.AsDouble() * FT3_TO_M3
+                vol = el.LookupParameter("Volume")
+                if vol and vol.HasValue:
+                    qty = vol.AsDouble() * FT3_TO_M3
                     unit = "m³"
             elif category_name == "Structural Framing":
-                len_param = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
-                if len_param and len_param.HasValue:
-                    qty = len_param.AsDouble() * FT_TO_M
+                length = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
+                if length and length.HasValue:
+                    qty = length.AsDouble() * FT_TO_M
                     unit = "m"
             elif category_name == "Structural Columns":
-                mat_param = el.LookupParameter("Structural Material")
-                mat_elem = revit.doc.GetElement(mat_param.AsElementId()) if mat_param else None
-                mat_name = mat_elem.Name if mat_elem else ""
-                if mat_name == CONCRETE_NAME:
-                    vol_param = el.LookupParameter("Volume")
-                    if vol_param and vol_param.HasValue:
-                        qty = vol_param.AsDouble() * FT3_TO_M3
+                mat = el.LookupParameter("Structural Material")
+                mat_elem = revit.doc.GetElement(mat.AsElementId()) if mat else None
+                mname = mat_elem.Name if mat_elem else ""
+                if mname == CONCRETE_NAME:
+                    vol = el.LookupParameter("Volume")
+                    if vol and vol.HasValue:
+                        qty = vol.AsDouble() * FT3_TO_M3
                         unit = "m³"
-                elif mat_name == STEEL_NAME:
-                    len_param = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
-                    if len_param and len_param.HasValue:
-                        qty = len_param.AsDouble() * FT_TO_M
+                elif mname == STEEL_NAME:
+                    length = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
+                    if length and length.HasValue:
+                        qty = length.AsDouble() * FT_TO_M
                         unit = "m"
             elif category_name == "Structural Rebar":
-                        len_param = el.LookupParameter("Total Bar Length")
-                        if len_param and len_param.HasValue:
-                         qty = len_param.AsDouble() * FT_TO_M
-                         unit = "m"
-
+                bl = el.LookupParameter("Total Bar Length")
+                if bl and bl.HasValue:
+                    qty = bl.AsDouble() * FT_TO_M
+                    unit = "m"
+            elif category_name == "Plumbing":
+                if el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_PlumbingFixtures):
+                    qty = 1
+                    unit = "No."
+                elif el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_PipeCurves):
+                    length = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
+                    if length and length.HasValue:
+                        qty = length.AsDouble() * FT_TO_M
+                        unit = "m"
             elif category_name == "Electrical":
-                len_param = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
-                if len_param and len_param.HasValue:
-                    qty = len_param.AsDouble() * FT_TO_M
+                length = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
+                if length and length.HasValue:
+                    qty = length.AsDouble() * FT_TO_M
                     unit = "m"
 
             comment = ""
-            comment_param = el_type.LookupParameter("Type Comments")
-            if comment_param and comment_param.HasValue:
-                comment = comment_param.AsString()
+            cp = el_type.LookupParameter("Type Comments")
+            if cp and cp.HasValue:
+                comment = cp.AsString()
 
             if name not in grouped:
                 grouped[name] = {"qty": 0.0, "rate": rate, "total": 0.0, "unit": unit, "comment": comment}
-
             grouped[name]["qty"] += qty
             grouped[name]["total"] += total
 
         except:
             skipped += 1
-            continue
 
-    # Write to Excel
     if grouped:
         sheet.write(row, 1, category_name.upper(), fmt_section)
         row += 1
@@ -209,7 +218,6 @@ for category_name, bic in CATEGORY_MAP.items():
             if data["comment"]:
                 sheet.write(row, 1, data["comment"], fmt_italic)
                 row += 1
-
             subtotal += data["total"]
 
         sheet.write(row, 1, category_name.upper() + " TO COLLECTION", fmt_bold)
@@ -217,7 +225,7 @@ for category_name, bic in CATEGORY_MAP.items():
         category_totals.append((category_name.upper(), round(subtotal, 2)))
         row += 2
 
-# --- Collection Summary ---
+# --- Summary ---
 sheet.write(row, 0, "COLLECTION", fmt_bold)
 row += 1
 for name, total in category_totals:
@@ -225,11 +233,8 @@ for name, total in category_totals:
     sheet.write(row, 5, total, fmt_money)
     row += 1
 
-# --- Grand Total ---
-grand_total = sum(t[1] for t in category_totals)
 sheet.write(row, 0, "GRAND TOTAL", fmt_bold)
-sheet.write(row, 5, grand_total, fmt_money)
+sheet.write(row, 5, sum(t[1] for t in category_totals), fmt_money)
 
-# --- Done ---
 wb.close()
 MessageBox.Show("BOQ export complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped), "✅ XLSX Export")

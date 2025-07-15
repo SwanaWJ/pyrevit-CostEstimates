@@ -32,8 +32,9 @@ category_methods = {
     DB.BuiltInCategory.OST_ElectricalFixtures: "count",
     DB.BuiltInCategory.OST_ElectricalEquipment: "count",
     DB.BuiltInCategory.OST_GenericModel: "area",
-    DB.BuiltInCategory.OST_Rebar: "length",  # ✅ Special handling
-    DB.BuiltInCategory.OST_PlumbingFixtures: "count",  # ✅ NEW
+    DB.BuiltInCategory.OST_Rebar: "length",
+    DB.BuiltInCategory.OST_PlumbingFixtures: "count",
+    DB.BuiltInCategory.OST_PipeCurves: "length",  # ✅ Include pipes for length
 }
 
 # Collect all elements by category
@@ -45,7 +46,7 @@ for cat in list(category_methods.keys()) + [DB.BuiltInCategory.OST_StructuralCol
                  .ToElements()
 
 # Begin transaction
-t = DB.Transaction(doc, "Set Test_1234 using specific material logic")
+t = DB.Transaction(doc, "Set Test_1234 using specific material logic including pipes")
 t.Start()
 
 updated = 0
@@ -103,7 +104,6 @@ for elem in elements:
                 raise Exception("No area data")
 
         elif method == "length":
-            # ✅ Use 'Total Bar Length' for Rebar
             if category.Id.IntegerValue == int(DB.BuiltInCategory.OST_Rebar):
                 len_param = elem.LookupParameter("Total Bar Length")
             else:
@@ -113,8 +113,6 @@ for elem in elements:
                 factor = len_param.AsDouble() * FT_TO_M
             else:
                 raise Exception("No length data")
-
-        # count → factor remains 1.0
 
         result = cost_val * factor
         target_param.Set(result)
