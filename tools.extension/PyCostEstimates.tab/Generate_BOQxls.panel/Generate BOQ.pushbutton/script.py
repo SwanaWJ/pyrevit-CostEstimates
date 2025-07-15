@@ -23,6 +23,7 @@ CATEGORY_MAP = {
     "Structural Foundations": DB.BuiltInCategory.OST_StructuralFoundation,
     "Structural Framing": DB.BuiltInCategory.OST_StructuralFraming,
     "Structural Columns": DB.BuiltInCategory.OST_StructuralColumns,
+    "Structural Rebar": DB.BuiltInCategory.OST_Rebar,  # ✅ NEW
     "Roofs": DB.BuiltInCategory.OST_Roofs,
     "Ceilings": DB.BuiltInCategory.OST_Ceilings,
     "Wall and Floor Finishes": DB.BuiltInCategory.OST_GenericModel,
@@ -42,6 +43,12 @@ CATEGORY_DESCRIPTIONS = {
     "Structural Foundations": "Mass concrete, RC footing, bedding and hardcore compacted in layers, damp-proof membrane and blinding, including formwork and reinforcement.",
     "Structural Framing": "Mild steel beams and trusses complete with welding, surface preparation, primer coating, and installation...",
     "Structural Columns": "Steel and concrete columns including starter bars, ties, shuttering, and specified concrete class with admixtures.",
+    "Structural Rebar": (
+        "High-yield deformed steel bars to BS 4449:2005 Grade B500B, supplied in standard lengths and bent to shape as scheduled, "
+        "including all cutting, bending, fixing, tying with 16-gauge annealed wire, and providing necessary spacers, chairs, laps, and hooks. "
+        "Bars shall be clean, free from loose rust, oil, or paint, and shall be fixed as per BS 8666. "
+        "All reinforcement shall be placed accurately to the specified cover, securely supported during concreting, and handled to prevent displacement."
+    ),
     "Roofs": "0.5mm IBR/IT4 Pre-painted roof sheeting fixed to purlins with appropriate screws, complete with ridge capping, barge boards, insulation and accessories.",
     "Ceilings": "Particle board ceilings (to BS EN 312...) and PVC tongue-and-groove ceiling panels...",
     "Wall and Floor Finishes": "British Standards for wall and floor finishes—primarily BS 5385, BS 8203, and BS 5325—establish best practices...",
@@ -151,6 +158,12 @@ for category_name, bic in CATEGORY_MAP.items():
                     if len_param and len_param.HasValue:
                         qty = len_param.AsDouble() * FT_TO_M
                         unit = "m"
+            elif category_name == "Structural Rebar":
+                        len_param = el.LookupParameter("Total Bar Length")
+                        if len_param and len_param.HasValue:
+                         qty = len_param.AsDouble() * FT_TO_M
+                         unit = "m"
+
             elif category_name == "Electrical":
                 len_param = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
                 if len_param and len_param.HasValue:

@@ -18,7 +18,7 @@ STEEL_NAME = "Metal - Steel 43-275"
 
 # Method of cost calculation by category
 category_methods = {
-     DB.BuiltInCategory.OST_Doors: "count",
+    DB.BuiltInCategory.OST_Doors: "count",
     DB.BuiltInCategory.OST_Windows: "count",
     DB.BuiltInCategory.OST_StructuralFraming: "length",
     DB.BuiltInCategory.OST_StructuralFoundation: "volume",
@@ -30,8 +30,9 @@ category_methods = {
     DB.BuiltInCategory.OST_LightingFixtures: "count",
     DB.BuiltInCategory.OST_LightingDevices: "count",
     DB.BuiltInCategory.OST_ElectricalFixtures: "count",
-    DB.BuiltInCategory.OST_ElectricalEquipment: "count",  # ✅ New line for Distribution Boards
-    DB.BuiltInCategory.OST_GenericModel: "area"
+    DB.BuiltInCategory.OST_ElectricalEquipment: "count",
+    DB.BuiltInCategory.OST_GenericModel: "area",
+    DB.BuiltInCategory.OST_Rebar: "length",  # ✅ Now included with special handling
 }
 
 # Collect all elements by category
@@ -92,19 +93,27 @@ for elem in elements:
                 factor = vol_param.AsDouble() * FT3_TO_M3
             else:
                 raise Exception("No volume data")
+
         elif method == "area":
             area_param = elem.LookupParameter("Area")
             if area_param and area_param.HasValue:
                 factor = area_param.AsDouble() * FT2_TO_M2
             else:
                 raise Exception("No area data")
+
         elif method == "length":
-            len_param = elem.LookupParameter("Length")
+            # ✅ Use 'Total Bar Length' for Rebar
+            if category.Id.IntegerValue == int(DB.BuiltInCategory.OST_Rebar):
+                len_param = elem.LookupParameter("Total Bar Length")
+            else:
+                len_param = elem.LookupParameter("Length")
+
             if len_param and len_param.HasValue:
                 factor = len_param.AsDouble() * FT_TO_M
             else:
                 raise Exception("No length data")
-        # count = 1 (default)
+
+        # count → factor remains 1.0
 
         result = cost_val * factor
         target_param.Set(result)
