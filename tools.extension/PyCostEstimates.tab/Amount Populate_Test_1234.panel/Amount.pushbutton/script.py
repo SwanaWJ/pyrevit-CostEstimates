@@ -18,18 +18,20 @@ STEEL_NAME = "Metal - Steel 43-275"
 
 # Method of cost calculation by category
 category_methods = {
-    DB.BuiltInCategory.OST_Doors: "count",
+     DB.BuiltInCategory.OST_Doors: "count",
     DB.BuiltInCategory.OST_Windows: "count",
     DB.BuiltInCategory.OST_StructuralFraming: "length",
     DB.BuiltInCategory.OST_StructuralFoundation: "volume",
     DB.BuiltInCategory.OST_Floors: "volume",
     DB.BuiltInCategory.OST_Walls: "area",
     DB.BuiltInCategory.OST_Roofs: "area",
-    DB.BuiltInCategory.OST_Ceilings: "area",  # ✅ Ceilings now included
+    DB.BuiltInCategory.OST_Ceilings: "area",
     DB.BuiltInCategory.OST_Conduit: "length",
     DB.BuiltInCategory.OST_LightingFixtures: "count",
     DB.BuiltInCategory.OST_LightingDevices: "count",
     DB.BuiltInCategory.OST_ElectricalFixtures: "count",
+    DB.BuiltInCategory.OST_ElectricalEquipment: "count",  # ✅ New line for Distribution Boards
+    DB.BuiltInCategory.OST_GenericModel: "area"
 }
 
 # Collect all elements by category

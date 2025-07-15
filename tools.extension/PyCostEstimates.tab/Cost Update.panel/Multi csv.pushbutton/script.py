@@ -127,7 +127,12 @@ with revit.Transaction("Set Composite Costs from CSV"):
 
     apply_cost_to_elements(switch_types, DB.BuiltInCategory.OST_ElectricalFixtures)
 
+# ✅ NEW: Apply to Electrical Equipment (e.g. Distribution Boards)
+    electrical_equipment_types = DB.FilteredElementCollector(revit.doc) \
+    .OfCategory(DB.BuiltInCategory.OST_ElectricalEquipment) \
+    .WhereElementIsElementType()
 
+    apply_cost_to_elements(electrical_equipment_types, DB.BuiltInCategory.OST_ElectricalEquipment)
 # --- Summary ---
 summary = ""
 
