@@ -34,7 +34,8 @@ category_methods = {
     DB.BuiltInCategory.OST_GenericModel: "area",
     DB.BuiltInCategory.OST_Rebar: "length",
     DB.BuiltInCategory.OST_PlumbingFixtures: "count",
-    DB.BuiltInCategory.OST_PipeCurves: "length",  # ✅ Include pipes for length
+    DB.BuiltInCategory.OST_PipeCurves: "length",
+    DB.BuiltInCategory.OST_PipeFitting: "count",  # ✅ New: Pipe fittings sold by count
 }
 
 # Collect all elements by category
@@ -46,7 +47,7 @@ for cat in list(category_methods.keys()) + [DB.BuiltInCategory.OST_StructuralCol
                  .ToElements()
 
 # Begin transaction
-t = DB.Transaction(doc, "Set Test_1234 using specific material logic including pipes")
+t = DB.Transaction(doc, "Set Test_1234 using specific material logic including pipe fittings")
 t.Start()
 
 updated = 0
@@ -58,7 +59,7 @@ for elem in elements:
         if not category:
             raise Exception("Missing category")
 
-        # Structural Columns: check material
+        # Structural Columns: check material to decide method
         if category.Id.IntegerValue == int(DB.BuiltInCategory.OST_StructuralColumns):
             mat_param = elem.LookupParameter("Structural Material")
             if not mat_param:
@@ -72,7 +73,6 @@ for elem in elements:
                 method = "length"
             else:
                 raise Exception("Unsupported material: '{}'".format(mat_name))
-
         else:
             method = category_methods.get(DB.BuiltInCategory(category.Id.IntegerValue))
             if not method:
@@ -114,6 +114,7 @@ for elem in elements:
             else:
                 raise Exception("No length data")
 
+        # Calculate and apply amount
         result = cost_val * factor
         target_param.Set(result)
         updated += 1

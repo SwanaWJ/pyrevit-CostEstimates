@@ -29,7 +29,8 @@ CATEGORY_MAP = {
     "Wall and Floor Finishes": DB.BuiltInCategory.OST_GenericModel,
     "Plumbing": [
         DB.BuiltInCategory.OST_PlumbingFixtures,
-        DB.BuiltInCategory.OST_PipeCurves
+        DB.BuiltInCategory.OST_PipeCurves,
+        DB.BuiltInCategory.OST_PipeFitting
     ],
     "Electrical": [
         DB.BuiltInCategory.OST_Conduit,
@@ -44,23 +45,23 @@ CATEGORY_DESCRIPTIONS = {
     "Block Work in Walls": "Blockwork in hollow concrete blocks load bearing walls, plastered both sides and painted, including all mortar and reinforcement ties.",
     "Doors": "Flush doors with hardwood frame, inclusive of ironmongery, architraves, painting, and necessary fixing accessories.",
     "Windows": "Aluminium sliding windows including glazing, window stays, handles, mosquito gauze and fixing to concrete or blockwork reveals.",
-    "Structural Foundations": "Mass concrete, RC footing, bedding and hardcore compacted in layers, damp-proof membrane and blinding, including formwork and reinforcement.",
+    "Structural Foundations": "Mass concrete, RC footing, bedding and hardcore compacted in layers, damp‑proof membrane and blinding, including formwork and reinforcement.",
     "Structural Framing": "Mild steel beams and trusses complete with welding, surface preparation, primer coating, and installation...",
     "Structural Columns": "Steel and concrete columns including starter bars, ties, shuttering, and specified concrete class with admixtures.",
     "Structural Rebar": (
-        "High-yield deformed steel bars to BS 4449:2005 Grade B500B, supplied in standard lengths and bent to shape as scheduled, "
-        "including all cutting, bending, fixing, tying with 16-gauge annealed wire, and providing necessary spacers, chairs, laps, and hooks. "
-        "Bars shall be clean, free from loose rust, oil, or paint, and shall be fixed as per BS 8666. "
+        "High‑yield deformed steel bars to BS 4449:2005 Grade B500B, supplied in standard lengths and bent to shape as scheduled, "
+        "including all cutting, bending, fixing, tying with 16‑gauge annealed wire, and providing necessary spacers, chairs, laps, and hooks. "
+        "Bars shall be clean, free from loose rust, oil, or paint, and shall be fixed as per BS 8666. "
         "All reinforcement shall be placed accurately to the specified cover, securely supported during concreting, and handled to prevent displacement."
     ),
-    "Roofs": "0.5mm IBR/IT4 Pre-painted roof sheeting fixed to purlins with appropriate screws, complete with ridge capping, barge boards, insulation and accessories.",
-    "Ceilings": "Particle board ceilings (to BS EN 312...) and PVC tongue-and-groove ceiling panels...",
+    "Roofs": "0.5mm IBR/IT4 pre‑painted roof sheeting fixed to purlins with appropriate screws, complete with ridge capping, barge boards, insulation and accessories.",
+    "Ceilings": "Particle board ceilings (to BS EN 312...) and PVC tongue‑and‑groove ceiling panels...",
     "Wall and Floor Finishes": "British Standards for wall and floor finishes—primarily BS 5385, BS 8203, and BS 5325—establish best practices...",
     "Plumbing": (
         "Sanitary appliances including WC pans, flush tanks, wash basins, sinks and urinals, complete with all fixings, traps and connections; "
         "and cold/hot water pipework inclusive of fittings, jointing and testing."
     ),
-    "Electrical": "Steel conduits to BS 4568‑1... Armoured cables to SANS 1507... IP‑rated junction boxes and fittings..."
+    "Electrical": "Steel conduits to BS 4568‑1, armoured cables to SANS 1507, IP‑rated junction boxes and fittings..."
 }
 
 # --- Unit conversions ---
@@ -132,24 +133,28 @@ for category_name, bic in CATEGORY_MAP.items():
             qty = 1.0
             unit = "No."
 
-            # --- Updated Plumbing and Remaining Logic ---
+            # Quantity logic
             if category_name in ["Doors", "Windows"]:
                 qty = 1
+
             elif category_name in ["Wall and Floor Finishes", "Roofs", "Ceilings"]:
                 area = el.LookupParameter("Area")
                 if area and area.HasValue:
                     qty = area.AsDouble() * FT2_TO_M2
                     unit = "m²"
+
             elif category_name == "Structural Foundations":
                 vol = el.LookupParameter("Volume")
                 if vol and vol.HasValue:
                     qty = vol.AsDouble() * FT3_TO_M3
                     unit = "m³"
+
             elif category_name == "Structural Framing":
                 length = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
                 if length and length.HasValue:
                     qty = length.AsDouble() * FT_TO_M
                     unit = "m"
+
             elif category_name == "Structural Columns":
                 mat = el.LookupParameter("Structural Material")
                 mat_elem = revit.doc.GetElement(mat.AsElementId()) if mat else None
@@ -164,20 +169,27 @@ for category_name, bic in CATEGORY_MAP.items():
                     if length and length.HasValue:
                         qty = length.AsDouble() * FT_TO_M
                         unit = "m"
+
             elif category_name == "Structural Rebar":
                 bl = el.LookupParameter("Total Bar Length")
                 if bl and bl.HasValue:
                     qty = bl.AsDouble() * FT_TO_M
                     unit = "m"
+
             elif category_name == "Plumbing":
-                if el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_PlumbingFixtures):
+                cat_id = el.Category.Id.IntegerValue
+                if cat_id in (
+                    int(DB.BuiltInCategory.OST_PlumbingFixtures),
+                    int(DB.BuiltInCategory.OST_PipeFitting)
+                ):
                     qty = 1
                     unit = "No."
-                elif el.Category.Id.IntegerValue == int(DB.BuiltInCategory.OST_PipeCurves):
+                elif cat_id == int(DB.BuiltInCategory.OST_PipeCurves):
                     length = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
                     if length and length.HasValue:
                         qty = length.AsDouble() * FT_TO_M
                         unit = "m"
+
             elif category_name == "Electrical":
                 length = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
                 if length and length.HasValue:
@@ -189,8 +201,7 @@ for category_name, bic in CATEGORY_MAP.items():
             if cp and cp.HasValue:
                 comment = cp.AsString()
 
-            if name not in grouped:
-                grouped[name] = {"qty": 0.0, "rate": rate, "total": 0.0, "unit": unit, "comment": comment}
+            grouped.setdefault(name, {"qty": 0.0, "rate": rate, "total": 0.0, "unit": unit, "comment": comment})
             grouped[name]["qty"] += qty
             grouped[name]["total"] += total
 
@@ -214,20 +225,18 @@ for category_name, bic in CATEGORY_MAP.items():
             sheet.write(row, 4, round(data["rate"], 2), fmt_money)
             sheet.write(row, 5, round(data["total"], 2), fmt_money)
             row += 1
-
             if data["comment"]:
                 sheet.write(row, 1, data["comment"], fmt_italic)
                 row += 1
             subtotal += data["total"]
 
-        sheet.write(row, 1, category_name.upper() + " TO COLLECTION", fmt_bold)
+        sheet.write(row, 1, category_name.upper()+" TO COLLECTION", fmt_bold)
         sheet.write(row, 5, round(subtotal, 2), fmt_money)
         category_totals.append((category_name.upper(), round(subtotal, 2)))
         row += 2
 
 # --- Summary ---
-sheet.write(row, 0, "COLLECTION", fmt_bold)
-row += 1
+sheet.write(row, 0, "COLLECTION", fmt_bold); row += 1
 for name, total in category_totals:
     sheet.write(row, 0, name, fmt_normal)
     sheet.write(row, 5, total, fmt_money)
@@ -237,4 +246,7 @@ sheet.write(row, 0, "GRAND TOTAL", fmt_bold)
 sheet.write(row, 5, sum(t[1] for t in category_totals), fmt_money)
 
 wb.close()
-MessageBox.Show("BOQ export complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped), "✅ XLSX Export")
+MessageBox.Show(
+    "BOQ export complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped),
+    "✅ XLSX Export"
+)

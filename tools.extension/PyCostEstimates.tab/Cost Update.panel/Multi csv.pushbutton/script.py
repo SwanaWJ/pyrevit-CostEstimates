@@ -90,15 +90,9 @@ with revit.Transaction("Set Composite Costs from CSV"):
                     else:
                         skipped.append("{0} (no editable 'Cost' parameter)".format(type_name))
 
-    # Original categories...
+    # Existing elements
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.WallType), DB.BuiltInCategory.OST_Walls)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FloorType), DB.BuiltInCategory.OST_Floors)
-
-    conduit_types = DB.FilteredElementCollector(revit.doc) \
-        .OfCategory(DB.BuiltInCategory.OST_Conduit) \
-        .WhereElementIsElementType()
-    apply_cost_to_elements(conduit_types, DB.BuiltInCategory.OST_Conduit)
-
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.WallFoundationType), DB.BuiltInCategory.OST_StructuralFoundation)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_StructuralFraming)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_GenericModel)
@@ -108,23 +102,18 @@ with revit.Transaction("Set Composite Costs from CSV"):
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_Doors)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_Windows)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.Structure.RebarBarType), DB.BuiltInCategory.OST_Rebar, name_param=False)
+
+    # Electrical
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_Conduit).WhereElementIsElementType(), DB.BuiltInCategory.OST_Conduit)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_LightingDevices).WhereElementIsElementType(), DB.BuiltInCategory.OST_LightingDevices)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_LightingFixtures).WhereElementIsElementType(), DB.BuiltInCategory.OST_LightingFixtures)
-    switch_types = DB.FilteredElementCollector(revit.doc) \
-        .OfCategory(DB.BuiltInCategory.OST_ElectricalFixtures) \
-        .WhereElementIsElementType()
-    apply_cost_to_elements(switch_types, DB.BuiltInCategory.OST_ElectricalFixtures)
-    electrical_equipment_types = DB.FilteredElementCollector(revit.doc) \
-        .OfCategory(DB.BuiltInCategory.OST_ElectricalEquipment) \
-        .WhereElementIsElementType()
-    apply_cost_to_elements(electrical_equipment_types, DB.BuiltInCategory.OST_ElectricalEquipment)
-    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_PlumbingFixtures)
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_ElectricalFixtures).WhereElementIsElementType(), DB.BuiltInCategory.OST_ElectricalFixtures)
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_ElectricalEquipment).WhereElementIsElementType(), DB.BuiltInCategory.OST_ElectricalEquipment)
 
-    # === ✅ NEW: Add Pipes ===
-    pipe_types = DB.FilteredElementCollector(revit.doc) \
-        .OfCategory(DB.BuiltInCategory.OST_PipeCurves) \
-        .WhereElementIsElementType()
-    apply_cost_to_elements(pipe_types, DB.BuiltInCategory.OST_PipeCurves)
+    # Plumbing
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_PlumbingFixtures)
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_PipeCurves).WhereElementIsElementType(), DB.BuiltInCategory.OST_PipeCurves)
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_PipeFitting).WhereElementIsElementType(), DB.BuiltInCategory.OST_PipeFitting)
 
 # --- Summary ---
 summary = ""
