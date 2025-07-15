@@ -35,7 +35,8 @@ category_methods = {
     DB.BuiltInCategory.OST_Rebar: "length",
     DB.BuiltInCategory.OST_PlumbingFixtures: "count",
     DB.BuiltInCategory.OST_PipeCurves: "length",
-    DB.BuiltInCategory.OST_PipeFitting: "count",  # ✅ New: Pipe fittings sold by count
+    DB.BuiltInCategory.OST_PipeFitting: "count",
+    DB.BuiltInCategory.OST_PipeAccessory: "count",  # ✅ NEW addition
 }
 
 # Collect all elements by category
@@ -47,7 +48,7 @@ for cat in list(category_methods.keys()) + [DB.BuiltInCategory.OST_StructuralCol
                  .ToElements()
 
 # Begin transaction
-t = DB.Transaction(doc, "Set Test_1234 using specific material logic including pipe fittings")
+t = DB.Transaction(doc, "Set Test_1234 using specific material logic including pipe accessories")
 t.Start()
 
 updated = 0

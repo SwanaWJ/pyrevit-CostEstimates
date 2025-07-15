@@ -110,10 +110,11 @@ with revit.Transaction("Set Composite Costs from CSV"):
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_ElectricalFixtures).WhereElementIsElementType(), DB.BuiltInCategory.OST_ElectricalFixtures)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_ElectricalEquipment).WhereElementIsElementType(), DB.BuiltInCategory.OST_ElectricalEquipment)
 
-    # Plumbing
+    # Plumbing (including Pipe Accessories)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfClass(DB.FamilySymbol), DB.BuiltInCategory.OST_PlumbingFixtures)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_PipeCurves).WhereElementIsElementType(), DB.BuiltInCategory.OST_PipeCurves)
     apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_PipeFitting).WhereElementIsElementType(), DB.BuiltInCategory.OST_PipeFitting)
+    apply_cost_to_elements(DB.FilteredElementCollector(revit.doc).OfCategory(DB.BuiltInCategory.OST_PipeAccessory).WhereElementIsElementType(), DB.BuiltInCategory.OST_PipeAccessory)
 
 # --- Summary ---
 summary = ""
