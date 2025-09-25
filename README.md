@@ -1,43 +1,36 @@
-# 🧮 pyRevit Cost Estimates Extension
+# 📊 pyRevit Cost Estimates Extension
 
-This extension helps automate quantity takeoffs and cost estimation directly inside Autodesk Revit using pyRevit.
-
----
-
-## 📌 Features
-
-- **Amount:** Populate cost parameter (e.g., `Test_1234`) based on category
-- **Generate BOQ:** Export structured cost breakdowns to Excel
-- **Grand Total:** Summarize total cost across all categories
-- **Update Family Cost:** Update family cost data using a CSV-based material pricing database
+Automate quantity takeoffs and cost estimation inside Autodesk Revit with **pyRevit**.  
+This extension reduces manual work by directly populating costs, generating Bills of Quantities (BOQs), and calculating totals from your model.
 
 ---
 
-## 🛠 Installation
+## ✨ Features
+
+- **Amount Population**: Automatically populate unit cost parameters (e.g., `Test_1234`) based on category.  
+- **Generate BOQ**: Export structured cost breakdowns to Excel.  
+- **Grand Total**: Summarize costs across all categories.  
+- **Update Family Cost**: Sync family cost data using a CSV-based material pricing database.  
+
+---
+
+## 📊 Demonstration
+
+Here’s a quick preview of the extension in action:
+
+![PyCostEstimate Demo](assets/PyCostEstimate_Demo_HD.gif)
+
+For higher clarity, [watch the full MP4 demo](assets/PyCostEstimate%20Demo%20video.mp4).  
+Or click below to open it in a new tab:
+
+<a href="assets/PyCostEstimate%20Demo%20video.mp4" target="_blank">▶ Watch Full MP4 Demo</a>
+
+---
+
+## ⚙️ Installation
 
 Clone this repo and add it as a pyRevit extension:
 
 ```bash
 pyrevit extend clone costestimates https://github.com/SwanaWJ/pyrevit-CostEstimates.git
 pyrevit extensions reload
-
-Once installed, you’ll see a "Cost Estimates" tab in your Revit ribbon.
-
-🧩 Folder Structure
-CostEstimates.extension/
-├── extension.yaml
-├── tab/
-│   └── Cost Estimates.tab/
-│       ├── Amount.pushbutton/
-│       ├── Generate BOQ.pushbutton/
-│       ├── Grand Total.pushbutton/
-│       └── Update Family Cost.pushbutton/
-
-🧑‍💻 Author
-Wachama J. Swana
-Founder of Scalefullsite – Automating engineering workflows
-
-## 📄 License
-
-MIT License
-
