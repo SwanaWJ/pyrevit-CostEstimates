@@ -39,9 +39,12 @@ Once **recipes** and **material costs** are set, just:
 1) **Cost Update** → 2) **Amount** → 3) **Generate BOQ** ✅
 
 ## Demo & test files
-- Sample project: [`assets/Sample test project.rvt`](assets/Sample%20test%20project.rvt)
-- Demo GIF: [`assets/PyCostEstimate_Demo_HD.gif`](assets/PyCostEstimate_Demo_HD.gif)
-- Demo video: [`assets/PyCostEstimate Demo video.mp4`](assets/PyCostEstimate%20Demo%20video.mp4)
+
+- Sample project: [assets/Sample test project.rvt](assets/Sample%20test%20project.rvt)
+- Demo GIF:  
+  ![Demo GIF](assets/PyCostEstimate_Demo_HD.gif)
+- Demo video: [assets/PyCostEstimate Demo video.mp4](assets/PyCostEstimate%20Demo%20video.mp4)
+
 
 ## Roadmap: live prices (no manual updates)
 I’m building a web scraper that pulls **real-time prices from hardware websites**, packages them into a JSON file, and feeds the extension automatically—removing manual CSV updates.  
@@ -66,3 +69,14 @@ The extension currently supports BOQ export and cost updates for the following R
 | Wall and Floor Finishes    | m²                  |
 
 
+## 🚀 Installation
+
+1. Make sure you have **[pyRevit installed](https://github.com/eirannejad/pyRevit/releases)**.  
+2. Download **pyRevit Cost Estimates** from:  
+   👉 [https://github.com/SwanaWJ/pyrevit-CostEstimates](https://github.com/SwanaWJ/pyrevit-CostEstimates)  
+3. In Revit, go to the **pyRevit tab** → look at the **left-most panel** → click the small **drop-down arrow** (menu opens).  
+4. Select **Settings** (pyRevit settings window opens).  
+5. Navigate to **Add Folder** → browse to the folder where you downloaded/cloned `pyrevit-CostEstimates`.  
+6. Click **Save Settings** and then **Reload**.  
+
+✅ You should now see a new tab named **PyCostEstimates** in your Revit ribbon.
