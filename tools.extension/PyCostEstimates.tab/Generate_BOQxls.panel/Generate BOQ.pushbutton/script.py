@@ -162,7 +162,14 @@ for cat_name in CATEGORY_ORDER:
             total = tot_p.AsDouble()
             qty = 1.0; unit = "No."
 
-            if cat_name in ("Doors","Windows"):
+            if cat_name == "Block Work in Walls":
+                prm = el.get_Parameter(DB.BuiltInParameter.HOST_AREA_COMPUTED) or el.LookupParameter("Area")
+                if prm and prm.HasValue:
+                    qty = prm.AsDouble()*FT2_TO_M2
+                    unit = "m²"
+                else:
+                    qty = 0.0
+            elif cat_name in ("Doors","Windows"):
                 qty = 1
             elif cat_name in ("Wall and Floor Finishes","Roofs","Ceilings"):
                 prm = el.LookupParameter("Area")
