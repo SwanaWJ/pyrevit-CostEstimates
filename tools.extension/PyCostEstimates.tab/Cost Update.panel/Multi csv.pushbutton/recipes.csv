@@ -11,9 +11,15 @@ Concrete_slab_100mm,Quarry Dust (A),0.3,6mm quarry dust
 Concrete_slab_100mm,Crushed Stones - 20mm,0.7,
 Concrete_slab_100mm,,,
 ,,,
-150x200mm Y12 RC beam,Cement 42.5-50Kg,1,
-150x200mm Y12 RC beam,Building Sand,0.1,
-150x200mm Y12 RC beam,Quarry Dust (A),2.5,
+Pad footing 1200x1200x300mm thick,Cement 42.5-50Kg,8,Grade C25 or mix ratio 1:2:4
+Pad footing 1200x1200x300mm thick,Quarry Dust (A),0.3,6mm quarry dust 
+Pad footing 1200x1200x300mm thick,Crushed Stones - 20mm,0.7,
+,,,
+,,,
+Strip footing 600x200x200mm thick,Cement 42.5-50Kg,1,
+Strip footing 600x200x200mm thick,Building Sand,0.1,
+Strip footing 600x200x200mm thick,Quarry Dust (A),2.5,
+,,,
 2mm Ceiling,Each,1,
 2mm Ceiling,Each,1,
 2400 mm x 1200 mm,0,5,

@@ -107,7 +107,27 @@ STEEL_NAME = "Metal - Steel 43-275"
 # --- Workbook setup ---
 wb = xlsxwriter.Workbook(xlsx_path)
 sheet = wb.add_worksheet("BOQ Export")
-sheet.freeze_panes(1, 0)
+# --- Title row (bold & left aligned) ---
+def _get_project_title():
+    pi = revit.doc.ProjectInformation
+    pname = None
+    p = pi.get_Parameter(DB.BuiltInParameter.PROJECT_NAME) if pi else None
+    if p and p.HasValue:
+        pname = p.AsString()
+    if not pname:
+        try:
+            import os as _os
+            pname = _os.path.splitext(revit.doc.Title)[0]
+        except Exception:
+            pname = "PROJECT"
+    return pname
+
+_title_text = "BILL OF QUANTITIES (BOQ) FOR THE CONSTRUCTION OF {}".format(_get_project_title().upper())
+_title_fmt = wb.add_format({'bold': True, 'font_name': 'Century Gothic', 'font_size': 14, 'align': 'left'})
+# Span across columns A:F (0..5) – adjust if you add/remove columns
+sheet.merge_range(0, 0, 0, 5, _title_text, _title_fmt)
+
+sheet.freeze_panes(2, 0)
 
 font = 'Century Gothic'
 def col_fmt(bold=False, italic=False, underline=False, wrap=False, num_fmt=None):
@@ -128,10 +148,10 @@ fmt_money = col_fmt(num_fmt='#,##0.00')
 
 # --- Columns ---
 headers = ["ITEM","DESCRIPTION","UNIT","QTY","RATE (ZMW)","AMOUNT (ZMW)"]
-for c,h in enumerate(headers): sheet.write(0,c,h,fmt_header)
+for c,h in enumerate(headers): sheet.write(1,c,h,fmt_header)
 sheet.set_column(1,1,45); sheet.set_column(4,4,12); sheet.set_column(5,5,16)
 
-row = 1
+row = 2
 skipped = 0
 category_totals = []
 
@@ -181,32 +201,48 @@ for cat_name in CATEGORY_ORDER:
                 prm = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
                 if prm and prm.HasValue: qty = prm.AsDouble()*FT_TO_M; unit="m"
             elif cat_name=="Structural Columns":
+                # Units:
+                #   - Concrete columns -> m3 (Volume)
+                #   - Steel/metal columns -> m (Length)
                 mat_prm = el.LookupParameter("Structural Material")
                 mat_elem = revit.doc.GetElement(mat_prm.AsElementId()) if mat_prm else None
-                mname = mat_elem.Name if mat_elem else ""
-                if mname==CONCRETE_NAME:
-                    prm = el.LookupParameter("Volume")
-                    if prm and prm.HasValue: qty = prm.AsDouble()*FT3_TO_M3; unit="m³"
-                elif mname==STEEL_NAME:
-                    prm = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
-                    if prm and prm.HasValue: qty = prm.AsDouble()*FT_TO_M; unit="m"
-            elif cat_name=="Structural Rebar":
-                prm = el.LookupParameter("Total Bar Length")
-                if prm and prm.HasValue: qty = prm.AsDouble()*FT_TO_M; unit="m"
-            elif cat_name=="Plumbing":
-                cid = el.Category.Id.IntegerValue
-                if cid in (
-                    int(DB.BuiltInCategory.OST_PlumbingFixtures),
-                    int(DB.BuiltInCategory.OST_PipeFitting),
-                    int(DB.BuiltInCategory.OST_PipeAccessory)
-                ):
-                    qty = 1; unit="No."
-                elif cid == int(DB.BuiltInCategory.OST_PipeCurves):
-                    prm = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
-                    if prm and prm.HasValue: qty = prm.AsDouble()*FT_TO_M; unit="m"
-            elif cat_name=="Electrical":
-                prm = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
-                if prm and prm.HasValue: qty = prm.AsDouble()*FT_TO_M; unit="m"
+                mname = (mat_elem.Name if mat_elem else "")
+                mclass = (getattr(mat_elem, "MaterialClass", "") if mat_elem else "")
+                low = (mname + " " + mclass).lower()
+
+                vol_prm = el.get_Parameter(DB.BuiltInParameter.HOST_VOLUME_COMPUTED)
+                if not vol_prm:
+                    vol_prm = el.LookupParameter("Volume")
+
+                len_prm = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
+                if not len_prm:
+                    len_prm = el.get_Parameter(DB.BuiltInParameter.INSTANCE_LENGTH_PARAM)
+                if not len_prm:
+                    len_prm = el.get_Parameter(DB.BuiltInParameter.COLUMN_HEIGHT)
+                if not len_prm:
+                    len_prm = el.LookupParameter("Length")
+
+                if "concrete" in low:
+                    if vol_prm and vol_prm.HasValue:
+                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m3"
+                    elif len_prm and len_prm.HasValue:
+                        qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
+                    else:
+                        qty = 1; unit = "No."
+                elif ("steel" in low) or ("metal" in low):
+                    if len_prm and len_prm.HasValue:
+                        qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
+                    elif vol_prm and vol_prm.HasValue:
+                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m3"
+                    else:
+                        qty = 1; unit = "No."
+                else:
+                    if vol_prm and vol_prm.HasValue and vol_prm.AsDouble()>0:
+                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m3"
+                    elif len_prm and len_prm.HasValue:
+                        qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
+                    else:
+                        qty = 1; unit = "No."
 
             comment = ""
             cp = el_type.LookupParameter("Type Comments")
