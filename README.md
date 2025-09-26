@@ -13,24 +13,36 @@ This extension reduces manual work by directly populating costs, generating Bill
 - **Update Family Cost**: Sync family cost data using a CSV-based material pricing database.  
 
 ---
+## Quick start (using the sample project)
+1. Open: `assets/Sample test project.rvt`
+2. In pyRevit, run: **Cost Update** → **Amount** → **Generate BOQ**  
+   Your BOQ will be generated in three clicks.
 
-## 📊 Demonstration
+## Update material unit costs
+You can change unit prices directly from the panel:
 
-Here’s a quick preview of the extension in action:
+1. **Press & hold `ALT`** and click **Cost Update** panel.  
+2. Navigate to: `Multi csv` → `material costs/`  
+3. Edit either file:
+   - `material_unit_costs.csv`
+   - `material_unit_cost2.csv`
+4. Save your changes and re-run **Cost Update**.
 
-![PyCostEstimate Demo](assets/PyCostEstimate_Demo_HD.gif)
+> The sample project’s families are named to match the CSVs so updates apply immediately.
 
-For higher clarity, [watch the full MP4 demo](assets/PyCostEstimate%20Demo%20video.mp4).  
-Or click below to open it in a new tab:
+## Recipes (combine materials for composite costs)
+Under the **Cost** panel, open **recipes**.  
+This is where you define composite items by combining materials.  
+**Example (Concrete):** cement + quarry dust + crushed stones + water + labor → concrete rate.
 
-<a href="assets/PyCostEstimate%20Demo%20video.mp4" target="_blank">▶ Watch Full MP4 Demo</a>
+Once **recipes** and **material costs** are set, just:
+1) **Cost Update** → 2) **Amount** → 3) **Generate BOQ** ✅
 
----
+## Demo & test files
+- Sample project: [`assets/Sample test project.rvt`](assets/Sample%20test%20project.rvt)
+- Demo GIF: [`assets/PyCostEstimate_Demo_HD.gif`](assets/PyCostEstimate_Demo_HD.gif)
+- Demo video: [`assets/PyCostEstimate Demo video.mp4`](assets/PyCostEstimate%20Demo%20video.mp4)
 
-## ⚙️ Installation
-
-Clone this repo and add it as a pyRevit extension:
-
-```bash
-pyrevit extend clone costestimates https://github.com/SwanaWJ/pyrevit-CostEstimates.git
-pyrevit extensions reload
+## Roadmap: live prices (no manual updates)
+I’m building a web scraper that pulls **real-time prices from hardware websites**, packages them into a JSON file, and feeds the extension automatically—removing manual CSV updates.  
+Preview data here: https://github.com/SwanaWJ/family-cost-data
