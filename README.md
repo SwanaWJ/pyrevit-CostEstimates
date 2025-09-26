@@ -73,7 +73,7 @@ The extension currently supports BOQ export and cost updates for the following R
 
 1. Make sure you have **[pyRevit installed](https://github.com/eirannejad/pyRevit/releases)**.  
 2. Download **pyRevit Cost Estimates** from:  
-   👉 [https://github.com/SwanaWJ/pyrevit-CostEstimates](https://github.com/SwanaWJ/pyrevit-CostEstimates)  
+   👉 https://github.com/SwanaWJ/pyrevit-CostEstimates/archive/refs/heads/main.zip 
 3. In Revit, go to the **pyRevit tab** → look at the **left-most panel** → click the small **drop-down arrow** (menu opens).  
 4. Select **Settings** (pyRevit settings window opens).  
 5. Navigate to **Add Folder** → browse to the folder where you downloaded/cloned `pyrevit-CostEstimates`.  
