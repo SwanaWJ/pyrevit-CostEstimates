@@ -46,3 +46,23 @@ Once **recipes** and **material costs** are set, just:
 ## Roadmap: live prices (no manual updates)
 I’m building a web scraper that pulls **real-time prices from hardware websites**, packages them into a JSON file, and feeds the extension automatically—removing manual CSV updates.  
 Preview data here: https://github.com/SwanaWJ/family-cost-data
+
+## Supported Categories
+
+The extension currently supports BOQ export and cost updates for the following Revit categories:
+
+| Category                  | Unit of Measurement |
+|----------------------------|---------------------|
+| Structural Foundations     | m³                  |
+| Block Work in Walls        | m²                  |
+| Structural Columns         | m³ / m (by material)|
+| Structural Framing         | m                   |
+| Structural Rebar           | m                   |
+| Roofs                      | m²                  |
+| Windows                    | No.                 |
+| Doors                      | No.                 |
+| Electrical                 | No.                 |
+| Plumbing                   | No.                 |
+| Wall and Floor Finishes    | m²                  |
+
+
