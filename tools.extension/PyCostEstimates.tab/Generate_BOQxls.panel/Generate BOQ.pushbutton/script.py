@@ -23,7 +23,7 @@ CATEGORY_ORDER = [
     "Structural Columns",
     "Structural Framing",
     "Structural Rebar",
-    "Roofs",  # ✅ Newly inserted here
+    "Roofs",
     "Windows",
     "Doors",
     "Electrical",
