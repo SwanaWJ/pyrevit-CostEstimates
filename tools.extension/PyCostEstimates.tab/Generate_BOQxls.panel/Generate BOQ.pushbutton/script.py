@@ -59,41 +59,41 @@ CATEGORY_MAP = {
 
 CATEGORY_DESCRIPTIONS = {
     "Block Work in Walls": (
-        "Concrete block walls, load‑bearing or cavity, plastered both sides and painted to BS 8000‑3 masonry workmanship standards, "
-        "including all mortar, bed‑joint reinforcement, movement provision and finishing to BS 5628‑2/‑3 quality."
+        "Concrete block walls, load-bearing or cavity, plastered both sides and painted to BS 8000-3 masonry workmanship standards, "
+        "including all mortar, bed-joint reinforcement, movement provision and finishing to BS 5628-2/-3 quality."
     ),
     "Doors": (
-        "Timber or engineered doors with hardwood frames, architraves, ironmongery, seals and painting; installed and fitted as per BS 8214."
+        "Timber or engineered doors with hardwood frames, architraves, ironmongery, seals and painting; installed and fitted as per BS 8214."
     ),
     "Windows": (
-        "Aluminium sliding or casement windows with glazing, mosquito nets, stays, handles and fixings; installed per BS 6262 (glazing) and BS 6375."
+        "Aluminium sliding or casement windows with glazing, mosquito nets, stays, handles and fixings; installed per BS 6262 (glazing) and BS 6375."
     ),
     "Structural Foundations": (
-        "Mass or reinforced concrete footings, hardcore bedding, DPM and formwork, conforming to BS 8000 (earthworks) and BS 8110 (concrete)."
+        "Mass or reinforced concrete footings, hardcore bedding, DPM and formwork, conforming to BS 8000 (earthworks) and BS 8110 (concrete)."
     ),
     "Structural Framing": (
-        "Mild steel beams and trusses, welded or bolted, treated with primer/paint to BS 5493 and fabricated per BS 5950."
+        "Mild steel beams and trusses, welded or bolted, treated with primer/paint to BS 5493 and fabricated per BS 5950."
     ),
     "Structural Columns": (
-        "Concrete/steel columns with starter bars, ties and shuttering; concrete to spec per BS 8110‑1, steel primed per BS 5493."
+        "Concrete/steel columns with starter bars, ties and shuttering; concrete to spec per BS 8110-1, steel primed per BS 5493."
     ),
     "Structural Rebar": (
-        "High‑yield deformed steel bars (BS 4449 B500B), cut, bent, fixed and supported with chairs/spacers, placed per BS 8666 & BS 8110‑1."
+        "High-yield deformed steel bars (BS 4449 B500B), cut, bent, fixed and supported with chairs/spacers, placed per BS 8666 & BS 8110-1."
     ),
     "Roofs": (
-        "0.5 mm IBR/IT4 pre‑painted roof sheeting fixed to purlins with screws, complete with ridge capping, insulation and flashings, per BS 5534 & BS 8217."
+        "0.5 mm IBR/IT4 pre-painted roof sheeting fixed to purlins with screws, complete with ridge capping, insulation and flashings, per BS 5534 & BS 8217."
     ),
     "Ceilings": (
-        "Particleboard or PVC tongue‑and‑groove ceilings, fixed or suspended per BS 5306 and manufacturer instructions."
+        "Particleboard or PVC tongue-and-groove ceilings, fixed or suspended per BS 5306 and manufacturer instructions."
     ),
     "Wall and Floor Finishes": (
-        "Tiling and screed finishes and plaster/paint to walls, following BS 5385 (tiling), BS 8203 (screed) and BS 8000 finishing workmanship standards."
+        "Tiling and screed finishes and plaster/paint to walls, following BS 5385 (tiling), BS 8203 (screed) and BS 8000 finishing workmanship standards."
     ),
     "Plumbing": (
-        "Sanitary appliances (WC pans, cisterns, basins, sinks, urinals) per BS 6465‑3, with associated pipework, fittings, joints, valves, traps and accessories per BS 5572 sanitary drainage."
+        "Sanitary appliances (WC pans, cisterns, basins, sinks, urinals) per BS 6465-3, with associated pipework, fittings, joints, valves, traps and accessories per BS 5572 sanitary drainage."
     ),
     "Electrical": (
-        "Steel conduits per BS 4568‑1, armoured cables/junction boxes per SANS 1507/BS 7671, with lighting fixtures and switchgear as specified."
+        "Steel conduits per BS 4568-1, armoured cables/junction boxes per SANS 1507/BS 7671, with lighting fixtures and switchgear as specified."
     )
 }
 
@@ -101,12 +101,11 @@ CATEGORY_DESCRIPTIONS = {
 FT3_TO_M3 = 0.0283168
 FT2_TO_M2 = 0.092903
 FT_TO_M = 0.3048
-CONCRETE_NAME = "Concrete - Cast-in-Place Concrete"
-STEEL_NAME = "Metal - Steel 43-275"
 
 # --- Workbook setup ---
 wb = xlsxwriter.Workbook(xlsx_path)
 sheet = wb.add_worksheet("BOQ Export")
+
 # --- Title row (bold & left aligned) ---
 def _get_project_title():
     pi = revit.doc.ProjectInformation
@@ -124,9 +123,7 @@ def _get_project_title():
 
 _title_text = "BILL OF QUANTITIES (BOQ) FOR THE CONSTRUCTION OF {}".format(_get_project_title().upper())
 _title_fmt = wb.add_format({'bold': True, 'font_name': 'Century Gothic', 'font_size': 14, 'align': 'left'})
-# Span across columns A:F (0..5) – adjust if you add/remove columns
 sheet.merge_range(0, 0, 0, 5, _title_text, _title_fmt)
-
 sheet.freeze_panes(2, 0)
 
 font = 'Century Gothic'
@@ -154,6 +151,9 @@ sheet.set_column(1,1,45); sheet.set_column(4,4,12); sheet.set_column(5,5,16)
 row = 2
 skipped = 0
 category_totals = []
+
+# >>> Category numbering counter
+cat_counter = 1
 
 # --- Loop over categories in specified order ---
 for cat_name in CATEGORY_ORDER:
@@ -201,26 +201,18 @@ for cat_name in CATEGORY_ORDER:
                 prm = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
                 if prm and prm.HasValue: qty = prm.AsDouble()*FT_TO_M; unit="m"
             elif cat_name=="Structural Columns":
-                # Units:
-                #   - Concrete columns -> m3 (Volume)
-                #   - Steel/metal columns -> m (Length)
+                # Concrete -> m3 (Volume), Steel/Metal -> m (Length); fallback to best available
                 mat_prm = el.LookupParameter("Structural Material")
                 mat_elem = revit.doc.GetElement(mat_prm.AsElementId()) if mat_prm else None
                 mname = (mat_elem.Name if mat_elem else "")
                 mclass = (getattr(mat_elem, "MaterialClass", "") if mat_elem else "")
                 low = (mname + " " + mclass).lower()
 
-                vol_prm = el.get_Parameter(DB.BuiltInParameter.HOST_VOLUME_COMPUTED)
-                if not vol_prm:
-                    vol_prm = el.LookupParameter("Volume")
-
-                len_prm = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
-                if not len_prm:
-                    len_prm = el.get_Parameter(DB.BuiltInParameter.INSTANCE_LENGTH_PARAM)
-                if not len_prm:
-                    len_prm = el.get_Parameter(DB.BuiltInParameter.COLUMN_HEIGHT)
-                if not len_prm:
-                    len_prm = el.LookupParameter("Length")
+                vol_prm = el.get_Parameter(DB.BuiltInParameter.HOST_VOLUME_COMPUTED) or el.LookupParameter("Volume")
+                len_prm = (el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH) or
+                           el.get_Parameter(DB.BuiltInParameter.INSTANCE_LENGTH_PARAM) or
+                           el.get_Parameter(DB.BuiltInParameter.COLUMN_HEIGHT) or
+                           el.LookupParameter("Length"))
 
                 if "concrete" in low:
                     if vol_prm and vol_prm.HasValue:
@@ -256,7 +248,12 @@ for cat_name in CATEGORY_ORDER:
             skipped +=1
 
     if grouped:
-        sheet.write(row,1,cat_name.upper(),fmt_section); row+=1
+        # >>> NUMBERED HEADING IN ITEM COLUMN (A) AND TITLE IN DESCRIPTION (B)
+        sheet.write(row, 0, str(cat_counter), fmt_section)   # ITEM column
+        sheet.write(row, 1, cat_name.upper(), fmt_section)   # DESCRIPTION column
+        row += 1
+        cat_counter += 1   # increment for next category
+
         if cat_name in CATEGORY_DESCRIPTIONS:
             sheet.write(row,1,CATEGORY_DESCRIPTIONS[cat_name],fmt_description); row+=1
 
@@ -273,23 +270,31 @@ for cat_name in CATEGORY_ORDER:
                 sheet.write(row,1,data["comment"],fmt_italic); row+=1
             subtotal += data["total"]
 
+        # TO COLLECTION (unnumbered)
         sheet.write(row,1,cat_name.upper()+" TO COLLECTION",fmt_section)
         sheet.write(row,5,round(subtotal,2),fmt_money)
         category_totals.append((cat_name.upper(),round(subtotal,2)))
         row+=2
 
 # --- Totals ---
-sheet.write(row,0,"COLLECTION",fmt_section); row+=1
+sheet.write(row,1,"COLLECTION",fmt_section); row+=1
+
+# Restart numbering under COLLECTION (title unnumbered)
+collect_counter = 1
 for cname in CATEGORY_ORDER:
     upper = cname.upper()
     for item in category_totals:
         if item[0] == upper:
-            sheet.write(row,0,item[0],fmt_normal)
-            sheet.write(row,5,item[1],fmt_money)
-            row+=1
+            sheet.write(row, 0, str(collect_counter), fmt_normal)  # ITEM numbering
+            sheet.write(row, 1, item[0], fmt_normal)               # DESCRIPTION
+            sheet.write(row, 5, item[1], fmt_money)                # Amount
+            row += 1
+            collect_counter += 1
 
-sheet.write(row,0,"GRAND TOTAL",fmt_section)
-sheet.write(row,5,sum(t[1] for t in category_totals),fmt_money)
+# keep ITEM column blank (optional but keeps borders consistent)
+sheet.write_blank(row, 0, None, fmt_section)           # A: blank, bordered
+sheet.write(row, 1, "GRAND TOTAL", fmt_section)        # B: label
+sheet.write(row, 5, sum(t[1] for t in category_totals), fmt_money)  # F: amount
 
 wb.close()
 MessageBox.Show("BOQ export complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped), "✅ XLSX Export")
