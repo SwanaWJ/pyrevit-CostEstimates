@@ -262,7 +262,7 @@ _USED_SHEETS = set()
 COVER_NAME   = _safe_sheet_name("COVER", _USED_SHEETS)
 BILL1_NAME   = _safe_sheet_name("BILL 1 - SUB & SUPERSTRUCTURE", _USED_SHEETS)
 BILL2_NAME   = _safe_sheet_name("BILL 2 - MEP", _USED_SHEETS)
-SUMMARY_NAME = _safe_sheet_name("SUMMARY", _USED_SHEETS)
+SUMMARY_NAME = _safe_sheet_name("GENERAL SUMMARY", _USED_SHEETS)
 
 init_cover_sheet(COVER_NAME, BILL1_NAME, BILL2_NAME, SUMMARY_NAME)
 
@@ -603,7 +603,7 @@ for cat_name in CATEGORY_ORDER:
 # Finalize bills & create SUMMARY sheet (fixed formulas)
 # ------------------------------------------------------------------------------
 summary_ws = wb.add_worksheet(SUMMARY_NAME)
-summary_ws.merge_range(0, 0, 0, 3, "SUMMARY OF BILLS", fmt_title)
+summary_ws.merge_range(0, 0, 0, 3, " GENERAL SUMMARY OF BILLS", fmt_title)
 summary_ws.write(1, 0, "BILL", fmt_header)
 summary_ws.write(1, 3, "AMOUNT (EUR)", fmt_header)
 summary_row = 2
