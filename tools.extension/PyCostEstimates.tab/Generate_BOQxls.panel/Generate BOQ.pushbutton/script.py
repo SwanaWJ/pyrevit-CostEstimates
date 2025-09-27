@@ -156,7 +156,7 @@ fmt_italic      = col_fmt(italic=True, wrap=True)
 fmt_money       = col_fmt(num_fmt='#,##0.00')
 
 # --- Columns ---
-headers = ["ITEM","DESCRIPTION","UNIT","QTY","RATE (ZMW)","AMOUNT (ZMW)"]
+headers = ["ITEM","DESCRIPTION","UNIT","QTY","RATE (EUR)","AMOUNT (EUR)"]
 for c,h in enumerate(headers): sheet.write(1,c,h,fmt_header)
 sheet.set_column(1,1,45); sheet.set_column(4,4,12); sheet.set_column(5,5,16)
 
