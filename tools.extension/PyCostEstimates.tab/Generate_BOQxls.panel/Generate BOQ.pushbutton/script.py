@@ -146,6 +146,11 @@ FT_TO_M   = 0.3048
 # Workbook & formats
 # ------------------------------------------------------------------------------
 wb = xlsxwriter.Workbook(xlsx_path, {'constant_memory': True})
+try:
+    wb.set_calc_on_load()
+except AttributeError:
+    pass
+
 
 font = 'Arial Narrow'
 def col_fmt(bold=False, italic=False, underline=False, wrap=False, num_fmt=None):
