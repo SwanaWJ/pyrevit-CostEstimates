@@ -14,7 +14,7 @@ desktop = os.path.expanduser("~/Desktop")
 xlsx_path = os.path.join(desktop, "BOQ_Export_From_Model.xlsx")
 
 # --- Parameters ---
-PARAM_COST = "Cost"         # rate on type
+PARAM_COST = "Cost"         # rate on type / material
 PARAM_TOTAL = "Test_1234"   # kept for backward compatibility (not used to write Amount)
 
 # --- Ordered Categories (must match CATEGORY_MAP keys exactly) ---
@@ -29,8 +29,13 @@ CATEGORY_ORDER = [
     "Doors",
     "Electrical",
     "Plumbing",
+    "Painting",                  # <-- virtual: painted wall faces (all together)
     "Wall and Floor Finishes",
+    "Furniture",                 # <-- NEW: after Wall and Floor Finishes
 ]
+
+# Sentinel for virtual categories
+VIRTUAL_PAINT = object()
 
 # --- Categories map (keys match above 1:1) ---
 CATEGORY_MAP = {
@@ -55,7 +60,9 @@ CATEGORY_MAP = {
         DB.BuiltInCategory.OST_PipeFitting,
         DB.BuiltInCategory.OST_PipeAccessory,
     ],
+    "Painting": VIRTUAL_PAINT,    # <-- handled specially
     "Wall and Floor Finishes": DB.BuiltInCategory.OST_GenericModel,
+    "Furniture": DB.BuiltInCategory.OST_Furniture,  # <-- NEW
     # Not in order, but you keep it in MAP if you use elsewhere:
     "Ceilings": DB.BuiltInCategory.OST_Ceilings,
 }
@@ -68,7 +75,7 @@ if _missing:
                 title="Category mapping error")
     raise SystemExit
 
-# --- Category descriptions (unchanged) ---
+# --- Category descriptions (unchanged + Painting) ---
 CATEGORY_DESCRIPTIONS = {
     "Block Work in Walls": (
         "Concrete block walls, load-bearing or cavity, plastered both sides and painted to BS 8000-3 masonry workmanship standards, "
@@ -106,7 +113,12 @@ CATEGORY_DESCRIPTIONS = {
     ),
     "Electrical": (
         "Steel conduits per BS 4568-1, armoured cables/junction boxes per SANS 1507/BS 7671, with lighting fixtures and switchgear as specified."
-    )
+    ),
+    "Painting": (
+        "Measured areas from the Revit Paint tool on wall faces (all sides), grouped by material. Rates use the material 'Cost' if present."
+    ),
+    # Description for Furniture is optional; unit is 'No.' by default so this can be omitted or customized later
+    # "Furniture": "Loose and built-in furniture items as modeled."
 }
 
 # --- Unit conversions ---
@@ -169,13 +181,164 @@ category_subtotal_cell = {}
 # >>> Category numbering counter
 cat_counter = 1
 
+# ---------------------- PAINTING helper (walls; parts & fallback supported) ----------------------
+def _gather_wall_painting(doc):
+    grouped = {}
+
+    def _add(material_name, rate, area_ft2):
+        key = "Paint - {}".format(material_name or "Paint")
+        qty_m2 = float(area_ft2) * FT2_TO_M2
+        if key not in grouped:
+            grouped[key] = {"qty": 0.0, "rate": float(rate or 0.0), "unit": "m²", "comment": ""}
+        grouped[key]["qty"] += qty_m2
+        if grouped[key]["rate"] == 0.0 and rate:
+            grouped[key]["rate"] = float(rate)
+
+    def _rate_from_material(mat):
+        try:
+            p = mat.LookupParameter(PARAM_COST) if mat else None
+            return float(p.AsDouble()) if (p and p.HasValue) else 0.0
+        except:
+            return 0.0
+
+    def _collect_from_faces(host_elem, faces):
+        for f in faces:
+            ref = f.Reference
+            if not ref:
+                continue
+            if not doc.IsPainted(host_elem.Id, ref):
+                continue
+            mid = doc.GetPaintedMaterial(host_elem.Id, ref)
+            if mid == DB.ElementId.InvalidElementId:
+                continue
+            mat = doc.GetElement(mid)
+            _add(mat.Name if mat else "Paint", _rate_from_material(mat), f.Area)
+
+    walls = (DB.FilteredElementCollector(doc)
+             .OfCategory(DB.BuiltInCategory.OST_Walls)
+             .WhereElementIsNotElementType()
+             .ToElements())
+
+    opt = DB.Options()
+    opt.ComputeReferences = True
+    opt.IncludeNonVisibleObjects = False
+
+    for wall in walls:
+        try:
+            got_any = False
+            try:
+                for side in (DB.ShellLayerType.Interior, DB.ShellLayerType.Exterior):
+                    refs = DB.HostObjectUtils.GetSideFaces(wall, side)
+                    if not refs:
+                        continue
+                    for ref in refs:
+                        if not doc.IsPainted(wall.Id, ref):
+                            continue
+                        gobj = wall.GetGeometryObjectFromReference(ref)
+                        face = gobj if isinstance(gobj, DB.Face) else None
+                        if not face:
+                            continue
+                        mid = doc.GetPaintedMaterial(wall.Id, ref)
+                        if mid == DB.ElementId.InvalidElementId:
+                            continue
+                        mat = doc.GetElement(mid)
+                        _add(mat.Name if mat else "Paint", _rate_from_material(mat), face.Area)
+                        got_any = True
+            except:
+                pass
+            if got_any:
+                continue
+
+            try:
+                pids = DB.PartUtils.GetAssociatedParts(doc, wall.Id, True, True)
+                if pids and pids.Count > 0:
+                    for pid in pids:
+                        part = doc.GetElement(pid)
+                        geom = part.get_Geometry(opt)
+                        if not geom:
+                            continue
+                        for g in geom:
+                            if isinstance(g, DB.Solid) and g.Faces:
+                                _collect_from_faces(part, list(g.Faces))
+                            elif isinstance(g, DB.GeometryInstance):
+                                inst = g.GetInstanceGeometry()
+                                for gg in inst:
+                                    if isinstance(gg, DB.Solid) and gg.Faces:
+                                        _collect_from_faces(part, list(gg.Faces))
+                    continue
+            except:
+                pass
+
+            try:
+                geom = wall.get_Geometry(opt)
+                if geom:
+                    for g in geom:
+                        if isinstance(g, DB.Solid) and g.Faces:
+                            _collect_from_faces(wall, list(g.Faces))
+                        elif isinstance(g, DB.GeometryInstance):
+                            inst = g.GetInstanceGeometry()
+                            for gg in inst:
+                                if isinstance(gg, DB.Solid) and gg.Faces:
+                                    _collect_from_faces(wall, list(gg.Faces))
+            except:
+                pass
+
+        except:
+            pass
+
+    for v in grouped.values():
+        if abs(v["qty"]) < 1e-6:
+            v["qty"] = 0.0
+    return grouped
+# -------------------------------------------------------------------------------
+
 # --- Loop over categories in specified order ---
 for cat_name in CATEGORY_ORDER:
     bic = CATEGORY_MAP.get(cat_name)
     if not bic:
         continue
 
-    # Collect elements for this category
+    # -------- VIRTUAL CATEGORY: Painting --------
+    if bic is VIRTUAL_PAINT:
+        grouped = _gather_wall_painting(revit.doc)
+
+        if grouped:
+            sheet.write(row, 0, str(cat_counter), fmt_section)
+            sheet.write(row, 1, cat_name.upper(), fmt_section)
+            row += 1
+            cat_counter += 1
+
+            if cat_name in CATEGORY_DESCRIPTIONS:
+                sheet.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
+                row += 1
+
+            first_item_row = row
+            letters = iter(string.ascii_uppercase)
+
+            for name, data in grouped.items():
+                sheet.write(row, 0, next(letters), fmt_normal)
+                sheet.write(row, 1, name,           fmt_normal)
+                sheet.write(row, 2, data["unit"],   fmt_normal)
+                sheet.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
+                sheet.write(row, 4, round(float(data["rate"]), 2), fmt_money)
+                sheet.write_formula(row, 5, "={}*{}".format(
+                    xl_rowcol_to_cell(row, 3), xl_rowcol_to_cell(row, 4)), fmt_money)
+                row += 1
+
+            last_item_row = row - 1
+            sheet.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
+            if last_item_row >= first_item_row:
+                sum_range = "F{}:F{}".format(first_item_row + 1, last_item_row + 1)
+                sheet.write_formula(row, 5, "=SUM({})".format(sum_range), fmt_money)
+            else:
+                sheet.write(row, 5, 0, fmt_money)
+
+            category_subtotal_cell[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
+            row += 2
+        continue
+    # -------- END VIRTUAL CATEGORY --------
+
+    # Collect elements for this (real) category
     if isinstance(bic, list):
         elements = []
         for sub in bic:
@@ -197,12 +360,8 @@ for cat_name in CATEGORY_ORDER:
             el_type = revit.doc.GetElement(el.GetTypeId())
             name    = el_type.get_Parameter(DB.BuiltInParameter.SYMBOL_NAME_PARAM).AsString()
 
-            # RATE (type-level "Cost"); allow missing → 0.0 so user can fill later
             cost_p  = el_type.LookupParameter(PARAM_COST)
             rate    = cost_p.AsDouble() if cost_p and cost_p.HasValue else 0.0
-
-            # We don't require PARAM_TOTAL anymore for formula-driven Amount
-            # tot_p = el.LookupParameter(PARAM_TOTAL)
 
             qty = 1.0
             unit = "No."
@@ -228,7 +387,6 @@ for cat_name in CATEGORY_ORDER:
                 if prm and prm.HasValue:
                     qty = prm.AsDouble() * FT_TO_M; unit = "m"
             elif cat_name == "Structural Columns":
-                # Concrete -> m3; Steel/Metal -> m; fallback best available
                 mat_prm  = el.LookupParameter("Structural Material")
                 mat_elem = revit.doc.GetElement(mat_prm.AsElementId()) if mat_prm else None
                 mname    = (mat_elem.Name if mat_elem else "")
@@ -262,11 +420,9 @@ for cat_name in CATEGORY_ORDER:
             if cp and cp.HasValue:
                 comment = cp.AsString()
 
-            # aggregate by type name
             if name not in grouped:
                 grouped[name] = {"qty": 0.0, "rate": rate, "unit": unit, "comment": comment}
             grouped[name]["qty"] += qty
-            # keep the first non-zero rate
             if grouped[name]["rate"] == 0.0 and rate:
                 grouped[name]["rate"] = rate
 
@@ -274,7 +430,6 @@ for cat_name in CATEGORY_ORDER:
             skipped += 1
 
     if grouped:
-        # >>> NUMBERED HEADING IN ITEM COLUMN (A) AND TITLE IN DESCRIPTION (B)
         sheet.write(row, 0, str(cat_counter), fmt_section)   # ITEM column
         sheet.write(row, 1, cat_name.upper(), fmt_section)   # DESCRIPTION column
         row += 1
@@ -284,46 +439,31 @@ for cat_name in CATEGORY_ORDER:
             sheet.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
             row += 1
 
-        # For subtotal range
         first_item_row = row
 
-        # Write items (A, B, C...)
         letters = iter(string.ascii_uppercase)
         for name, data in grouped.items():
-            sheet.write(row, 0, next(letters), fmt_normal)     # ITEM (A, B, ...)
-            sheet.write(row, 1, name,           fmt_normal)    # DESCRIPTION
-            sheet.write(row, 2, data["unit"],   fmt_normal)    # UNIT
-
-            # QTY
+            sheet.write(row, 0, next(letters), fmt_normal)
+            sheet.write(row, 1, name,           fmt_normal)
+            sheet.write(row, 2, data["unit"],   fmt_normal)
             sheet.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
-
-            # RATE (editable)
             sheet.write(row, 4, round(float(data["rate"]), 2), fmt_money)
-
-            # AMOUNT = QTY * RATE (live formula)
-            qty_cell  = xl_rowcol_to_cell(row, 3)  # D
-            rate_cell = xl_rowcol_to_cell(row, 4)  # E
-            sheet.write_formula(row, 5, "={}*{}".format(qty_cell, rate_cell), fmt_money)
-
+            sheet.write_formula(row, 5, "={}*{}".format(
+                xl_rowcol_to_cell(row, 3), xl_rowcol_to_cell(row, 4)), fmt_money)
             row += 1
 
-            # Optional comment line
             if data["comment"]:
                 sheet.write(row, 1, data["comment"], fmt_italic)
                 row += 1
 
-        # TO COLLECTION (unnumbered): SUM amounts (F) for this block
         last_item_row = row - 1
         if last_item_row >= first_item_row:
-            sum_range = "F{}:F{}".format(first_item_row + 1, last_item_row + 1)  # Excel is 1-based
+            sum_range = "F{}:F{}".format(first_item_row + 1, last_item_row + 1)
             sheet.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
             sheet.write_formula(row, 5, "=SUM({})".format(sum_range), fmt_money)
-
-            # Record subtotal cell address for COLLECTION section
             category_subtotal_cell[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
             row += 2
         else:
-            # No items
             sheet.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
             sheet.write(row, 5, 0, fmt_money)
             category_subtotal_cell[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
@@ -339,14 +479,14 @@ for cname in CATEGORY_ORDER:
     upper = cname.upper()
     cell  = category_subtotal_cell.get(upper)
     if cell:
-        sheet.write(row, 0, str(collect_counter), fmt_normal)     # ITEM numbering
-        sheet.write(row, 1, upper,              fmt_normal)       # DESCRIPTION
+        sheet.write(row, 0, str(collect_counter), fmt_normal)
+        sheet.write(row, 1, upper,              fmt_normal)
         sheet.write_formula(row, 5, "={}".format(cell), fmt_money)
         row += 1
         collect_counter += 1
 
 # GRAND TOTAL (unnumbered, aligned under DESCRIPTION)
-sheet.write_blank(row, 0, None, fmt_section)                      # keep borders in ITEM
+sheet.write_blank(row, 0, None, fmt_section)
 sheet.write(row, 1, "GRAND TOTAL", fmt_section)
 if category_subtotal_cell:
     sum_cells = ",".join(category_subtotal_cell[k.upper()]
