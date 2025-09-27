@@ -9,17 +9,27 @@ clr.AddReference("System.Windows.Forms")
 from System.Windows.Forms import MessageBox
 from pyrevit import revit, DB
 
+
 # ------------------------------------------------------------------------------
 # Save path
 # ------------------------------------------------------------------------------
 desktop = os.path.expanduser("~/Desktop")
 xlsx_path = os.path.join(desktop, "BOQ_Export_From_Model.xlsx")
 
+
 # ------------------------------------------------------------------------------
 # Parameters / constants
 # ------------------------------------------------------------------------------
 PARAM_COST  = "Cost"        # rate on type / material
 PARAM_TOTAL = "Test_1234"   # kept for backward compatibility (not used to write Amount)
+
+# Worksheet tab colors
+TAB_COLORS = {
+    "COVER":   "#A6A6A6",  # gray
+    "BILL1":   "#4472C4",  # blue
+    "BILL2":   "#C00000",  # red
+    "SUMMARY": "#70AD47",  # green
+}
 
 # Ordered Categories (keys must match CATEGORY_MAP exactly)
 CATEGORY_ORDER = [
@@ -131,21 +141,21 @@ FT3_TO_M3 = 0.0283168
 FT2_TO_M2 = 0.092903
 FT_TO_M   = 0.3048
 
+
 # ------------------------------------------------------------------------------
 # Workbook & formats
 # ------------------------------------------------------------------------------
-wb = xlsxwriter.Workbook(xlsx_path)
+wb = xlsxwriter.Workbook(xlsx_path, {'constant_memory': True})
 
 font = 'Arial Narrow'
 def col_fmt(bold=False, italic=False, underline=False, wrap=False, num_fmt=None):
-    fmt = {'valign': 'top', 'font_name': font, 'font_size': 12, 'border': 1}  # ← added font_size: 12
+    fmt = {'valign': 'top', 'font_name': font, 'font_size': 12, 'border': 1}
     if bold: fmt['bold'] = True
     if italic: fmt['italic'] = True
     if underline: fmt['underline'] = True
     if wrap: fmt['text_wrap'] = True
     if num_fmt: fmt['num_format'] = num_fmt
     return wb.add_format(fmt)
-
 
 fmt_header      = col_fmt(bold=True)
 fmt_section     = col_fmt(bold=True)
@@ -155,6 +165,7 @@ fmt_italic      = col_fmt(italic=True, wrap=True)
 fmt_money       = col_fmt(num_fmt='#,##0.00')
 fmt_title       = wb.add_format({'bold': True, 'font_name': font, 'font_size': 12, 'align':'left'})
 fmt_cover_big   = wb.add_format({'bold': True, 'font_name': font, 'font_size': 12, 'align':'center'})
+
 
 # ------------------------------------------------------------------------------
 # Title and helpers
@@ -203,6 +214,13 @@ def _is_noise(s):
         return True
     return False
 
+# Safe item label (A..Z then 27→"27", etc.)
+def _item_label(idx):
+    if idx < 26:
+        return string.ascii_uppercase[idx]
+    return str(idx + 1)
+
+
 # ------------------------------------------------------------------------------
 # Sheet creation helpers
 # ------------------------------------------------------------------------------
@@ -210,7 +228,8 @@ def init_bill_sheet(name):
     ws = wb.add_worksheet(name)
     ws.merge_range(0, 0, 0, 5, TITLE_TEXT, fmt_title)
     headers = ["ITEM","DESCRIPTION","UNIT","QTY","RATE (EUR)","AMOUNT (EUR)"]
-    for c,h in enumerate(headers): ws.write(1,c,h,fmt_header)
+    for c,h in enumerate(headers):
+        ws.write(1, c, h, fmt_header)
     ws.set_column(1,1,45); ws.set_column(4,4,12); ws.set_column(5,5,16)
     ws.freeze_panes(2,0)
     return ws
@@ -244,8 +263,7 @@ def finalize_bill_sheet(ws, row, sheet_cat_order, cat_subtotals):
     ws.write_blank(row, 0, None, fmt_section)
     ws.write(row, 1, "GRAND TOTAL", fmt_section)
     if cat_subtotals:
-        sum_cells = ",".join(cat_subtotals[k.upper()]
-                             for k in sheet_cat_order if k.upper() in cat_subtotals)
+        sum_cells = ",".join(cat_subtotals[k.upper()] for k in sheet_cat_order if k.upper() in cat_subtotals)
         ws.write_formula(row, 5, "=SUM({})".format(sum_cells), fmt_money)
     else:
         ws.write(row, 5, 0, fmt_money)
@@ -256,6 +274,7 @@ def finalize_bill_sheet(ws, row, sheet_cat_order, cat_subtotals):
 def _sheet_ref(name, cell_addr):
     return "'{}'!{}".format(name.replace("'", "''"), cell_addr)
 
+
 # ------------------------------------------------------------------------------
 # Build workbook structure (sanitized names)
 # ------------------------------------------------------------------------------
@@ -265,17 +284,21 @@ BILL1_NAME   = _safe_sheet_name("BILL 1 - SUB & SUPERSTRUCTURE", _USED_SHEETS)
 BILL2_NAME   = _safe_sheet_name("BILL 2 - MEP", _USED_SHEETS)
 SUMMARY_NAME = _safe_sheet_name("GENERAL SUMMARY", _USED_SHEETS)
 
-init_cover_sheet(COVER_NAME, BILL1_NAME, BILL2_NAME, SUMMARY_NAME)
+cover_ws = init_cover_sheet(COVER_NAME, BILL1_NAME, BILL2_NAME, SUMMARY_NAME)
+cover_ws.set_tab_color(TAB_COLORS["COVER"])
 
 sheets = {
     BILL1_NAME: {"ws": init_bill_sheet(BILL1_NAME), "row": 2, "cat_counter": 1, "cat_subtotals": {}, "order": []},
     BILL2_NAME: {"ws": init_bill_sheet(BILL2_NAME), "row": 2, "cat_counter": 1, "cat_subtotals": {}, "order": []},
 }
+sheets[BILL1_NAME]["ws"].set_tab_color(TAB_COLORS["BILL1"])
+sheets[BILL2_NAME]["ws"].set_tab_color(TAB_COLORS["BILL2"])
 
 # Route categories to bills (default to BILL 1)
 BILL_FOR_CATEGORY = {"Electrical": BILL2_NAME, "Plumbing": BILL2_NAME}
 def _bill_for(cat):
     return BILL_FOR_CATEGORY.get(cat, BILL1_NAME)
+
 
 # ------------------------------------------------------------------------------
 # Painting helper (walls; parts & fallback supported)
@@ -377,6 +400,7 @@ def _gather_wall_painting(doc):
             v["qty"] = 0.0
     return grouped
 
+
 # ------------------------------------------------------------------------------
 # MAIN: loop over categories and route rows to the right bill
 # ------------------------------------------------------------------------------
@@ -407,10 +431,9 @@ for cat_name in CATEGORY_ORDER:
                 row += 1
 
             first_item_row = row
-            letters = iter(string.ascii_uppercase)
-
+            item_idx = 0
             for name, data in grouped.items():
-                ws.write(row, 0, next(letters), fmt_normal)
+                ws.write(row, 0, _item_label(item_idx), fmt_normal)
                 ws.write(row, 1, name,           fmt_normal)
                 ws.write(row, 2, data["unit"],   fmt_normal)
                 ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
@@ -418,6 +441,7 @@ for cat_name in CATEGORY_ORDER:
                 ws.write_formula(row, 5, "={}*{}".format(
                     xl_rowcol_to_cell(row, 3), xl_rowcol_to_cell(row, 4)), fmt_money)
                 row += 1
+                item_idx += 1
 
             last_item_row = row - 1
             ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
@@ -521,17 +545,17 @@ for cat_name in CATEGORY_ORDER:
 
                 if "concrete" in low:
                     if vol_prm and vol_prm.HasValue:
-                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m3"
+                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m³"
                     elif len_prm and len_prm.HasValue:
                         qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
                 elif ("steel" in low) or ("metal" in low):
                     if len_prm and len_prm.HasValue:
                         qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
                     elif vol_prm and vol_prm.HasValue:
-                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m3"
+                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m³"
                 else:
                     if vol_prm and vol_prm.HasValue and vol_prm.AsDouble()>0:
-                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m3"
+                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m³"
                     elif len_prm and len_prm.HasValue:
                         qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
 
@@ -570,10 +594,9 @@ for cat_name in CATEGORY_ORDER:
             row += 1
 
         first_item_row = row
-
-        letters = iter(string.ascii_uppercase)
+        item_idx = 0
         for name, data in grouped.items():
-            ws.write(row, 0, next(letters), fmt_normal)
+            ws.write(row, 0, _item_label(item_idx), fmt_normal)
             ws.write(row, 1, name,           fmt_normal)
             ws.write(row, 2, data["unit"],   fmt_normal)
             ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
@@ -581,6 +604,7 @@ for cat_name in CATEGORY_ORDER:
             ws.write_formula(row, 5, "={}*{}".format(
                 xl_rowcol_to_cell(row, 3), xl_rowcol_to_cell(row, 4)), fmt_money)
             row += 1
+            item_idx += 1
 
             if data.get("comment"):
                 ws.write(row, 1, data["comment"], fmt_italic)
@@ -600,15 +624,19 @@ for cat_name in CATEGORY_ORDER:
     ctx["row"] = row
     ctx["cat_counter"] = cat_counter
 
+
 # ------------------------------------------------------------------------------
-# Finalize bills & create SUMMARY sheet (fixed formulas)
+# Finalize bills & create GENERAL SUMMARY (colored tab + fixed formulas)
 # ------------------------------------------------------------------------------
 summary_ws = wb.add_worksheet(SUMMARY_NAME)
-summary_ws.merge_range(0, 0, 0, 3, " GENERAL SUMMARY OF BILLS", fmt_title)
+summary_ws.set_tab_color(TAB_COLORS["SUMMARY"])
+summary_ws.merge_range(0, 0, 0, 3, "GENERAL SUMMARY OF BILLS", fmt_title)
 summary_ws.write(1, 0, "BILL", fmt_header)
 summary_ws.write(1, 3, "AMOUNT (EUR)", fmt_header)
-summary_row = 2
+summary_ws.set_column(0, 0, 34)   # BILL
+summary_ws.set_column(3, 3, 16)   # AMOUNT (EUR)
 
+summary_row = 2
 grand_refs = []
 
 for bill_name, ctx in sheets.items():
@@ -629,4 +657,7 @@ else:
     summary_ws.write(summary_row, 3, 0, fmt_money)
 
 wb.close()
-MessageBox.Show("BOQ export (multi-sheet) complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped), "✅ XLSX Export")
+MessageBox.Show(
+    "BOQ export (multi-sheet) complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped),
+    "✅ XLSX Export"
+)
