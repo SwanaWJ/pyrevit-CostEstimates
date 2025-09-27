@@ -81,4 +81,4 @@ The extension currently supports BOQ export and cost updates for the following R
 
 ✅ You should now see a new tab named **PyCostEstimates** in your Revit ribbon.
 
-Good lucky
+Good lucky!
