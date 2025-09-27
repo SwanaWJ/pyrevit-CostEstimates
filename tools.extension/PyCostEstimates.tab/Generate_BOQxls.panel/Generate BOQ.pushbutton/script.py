@@ -9,15 +9,19 @@ clr.AddReference("System.Windows.Forms")
 from System.Windows.Forms import MessageBox
 from pyrevit import revit, DB
 
-# --- Save path ---
+# ------------------------------------------------------------------------------
+# Save path
+# ------------------------------------------------------------------------------
 desktop = os.path.expanduser("~/Desktop")
 xlsx_path = os.path.join(desktop, "BOQ_Export_From_Model.xlsx")
 
-# --- Parameters ---
+# ------------------------------------------------------------------------------
+# Parameters / constants
+# ------------------------------------------------------------------------------
 PARAM_COST  = "Cost"        # rate on type / material
 PARAM_TOTAL = "Test_1234"   # kept for backward compatibility (not used to write Amount)
 
-# --- Ordered Categories (must match CATEGORY_MAP keys exactly) ---
+# Ordered Categories (keys must match CATEGORY_MAP exactly)
 CATEGORY_ORDER = [
     "Structural Foundations",
     "Block Work in Walls",
@@ -29,15 +33,15 @@ CATEGORY_ORDER = [
     "Doors",
     "Electrical",
     "Plumbing",
-    "Painting",                  # <-- virtual: painted wall faces (all together)
+    "Painting",                  # virtual: painted wall faces (all together)
     "Wall and Floor Finishes",
-    "Furniture",                 # <-- includes Furniture + Furniture Systems
+    "Furniture",
 ]
 
 # Sentinel for virtual categories
 VIRTUAL_PAINT = object()
 
-# --- Categories map (keys match above 1:1) ---
+# Categories map
 CATEGORY_MAP = {
     "Structural Foundations": DB.BuiltInCategory.OST_StructuralFoundation,
     "Block Work in Walls":    DB.BuiltInCategory.OST_Walls,
@@ -60,17 +64,17 @@ CATEGORY_MAP = {
         DB.BuiltInCategory.OST_PipeFitting,
         DB.BuiltInCategory.OST_PipeAccessory,
     ],
-    "Painting": VIRTUAL_PAINT,    # <-- handled specially
+    "Painting": VIRTUAL_PAINT,    # handled specially
     "Wall and Floor Finishes": DB.BuiltInCategory.OST_GenericModel,
     "Furniture": [
         DB.BuiltInCategory.OST_Furniture,
-        DB.BuiltInCategory.OST_FurnitureSystems,   # added
+        DB.BuiltInCategory.OST_FurnitureSystems,
     ],
-    # Not in order, but you keep it in MAP if you use elsewhere:
+    # Not in order, but handy to have available:
     "Ceilings": DB.BuiltInCategory.OST_Ceilings,
 }
 
-# ---- sanity check to avoid KeyError on typos/mismatches ----
+# Sanity check to avoid KeyError on typos/mismatches
 _missing = [c for c in CATEGORY_ORDER if c not in CATEGORY_MAP]
 if _missing:
     from pyrevit import forms
@@ -78,7 +82,7 @@ if _missing:
                 title="Category mapping error")
     raise SystemExit
 
-# --- Category descriptions (unchanged + Painting) ---
+# Category descriptions
 CATEGORY_DESCRIPTIONS = {
     "Block Work in Walls": (
         "Concrete block walls, load-bearing or cavity, plastered both sides and painted to BS 8000-3 masonry workmanship standards, "
@@ -120,37 +124,17 @@ CATEGORY_DESCRIPTIONS = {
     "Painting": (
         "Measured areas from the Revit Paint tool on wall faces (all sides), grouped by material. Rates use the material 'Cost' if present."
     ),
-    # "Furniture": "Loose and built-in furniture items as modeled."
 }
 
-# --- Unit conversions ---
+# Unit conversions
 FT3_TO_M3 = 0.0283168
 FT2_TO_M2 = 0.092903
 FT_TO_M   = 0.3048
 
-# --- Workbook setup ---
+# ------------------------------------------------------------------------------
+# Workbook & formats
+# ------------------------------------------------------------------------------
 wb = xlsxwriter.Workbook(xlsx_path)
-sheet = wb.add_worksheet("BOQ Export")
-
-# --- Title row (bold & left aligned) ---
-def _get_project_title():
-    pi = revit.doc.ProjectInformation
-    pname = None
-    p = pi.get_Parameter(DB.BuiltInParameter.PROJECT_NAME) if pi else None
-    if p and p.HasValue:
-        pname = p.AsString()
-    if not pname:
-        try:
-            import os as _os
-            pname = _os.path.splitext(revit.doc.Title)[0]
-        except Exception:
-            pname = "PROJECT"
-    return pname
-
-_title_text = "BILL OF QUANTITIES (BOQ) FOR THE CONSTRUCTION OF {}".format(_get_project_title().upper())
-_title_fmt  = wb.add_format({'bold': True, 'font_name': 'Century Gothic', 'font_size': 14, 'align': 'left'})
-sheet.merge_range(0, 0, 0, 5, _title_text, _title_fmt)
-sheet.freeze_panes(2, 0)
 
 font = 'Century Gothic'
 def col_fmt(bold=False, italic=False, underline=False, wrap=False, num_fmt=None):
@@ -168,22 +152,45 @@ fmt_description = col_fmt(italic=True, underline=True, wrap=True)
 fmt_normal      = col_fmt()
 fmt_italic      = col_fmt(italic=True, wrap=True)
 fmt_money       = col_fmt(num_fmt='#,##0.00')
+fmt_title       = wb.add_format({'bold': True, 'font_name': font, 'font_size': 16, 'align':'left'})
+fmt_cover_big   = wb.add_format({'bold': True, 'font_name': font, 'font_size': 20, 'align':'center'})
 
-# --- Columns ---
-headers = ["ITEM","DESCRIPTION","UNIT","QTY","RATE (EUR)","AMOUNT (EUR)"]
-for c,h in enumerate(headers): sheet.write(1,c,h,fmt_header)
-sheet.set_column(1,1,45); sheet.set_column(4,4,12); sheet.set_column(5,5,16)
+# ------------------------------------------------------------------------------
+# Title and helpers
+# ------------------------------------------------------------------------------
+def _get_project_title():
+    pi = revit.doc.ProjectInformation
+    pname = None
+    p = pi.get_Parameter(DB.BuiltInParameter.PROJECT_NAME) if pi else None
+    if p and p.HasValue:
+        pname = p.AsString()
+    if not pname:
+        try:
+            import os as _os
+            pname = _os.path.splitext(revit.doc.Title)[0]
+        except Exception:
+            pname = "PROJECT"
+    return pname
 
-row = 2
-skipped = 0
+TITLE_TEXT = "BILL OF QUANTITIES (BOQ) FOR THE CONSTRUCTION OF {}".format(_get_project_title().upper())
 
-# Store each category subtotal cell address for COLLECTION & GRAND TOTAL
-category_subtotal_cell = {}
+# Excel sheet-name helper (<= 31 chars, remove illegal chars, ensure unique)
+def _safe_sheet_name(name, used):
+    s = name.replace(u"–", "-").replace(u"—", "-")
+    for ch in '[]:*?/\\':
+        s = s.replace(ch, "")
+    s = s.strip().strip("'")
+    s = s[:31]
+    base = s
+    i = 1
+    while s in used:
+        suf = "({})".format(i)
+        s = (base[:31-len(suf)] + suf)
+        i += 1
+    used.add(s)
+    return s
 
-# >>> Category numbering counter
-cat_counter = 1
-
-# -------- comment helpers (Fix B) --------------------------------------------
+# Comment noise filter (use Type Comments only; ignore numeric/short)
 def _is_noise(s):
     s = (s or "").strip()
     if not s:
@@ -194,9 +201,84 @@ def _is_noise(s):
     if len(s) < 3:
         return True
     return False
-# -----------------------------------------------------------------------------
 
-# ---------------------- PAINTING helper (walls; parts & fallback supported) ---
+# ------------------------------------------------------------------------------
+# Sheet creation helpers
+# ------------------------------------------------------------------------------
+def init_bill_sheet(name):
+    ws = wb.add_worksheet(name)
+    ws.merge_range(0, 0, 0, 5, TITLE_TEXT, fmt_title)
+    headers = ["ITEM","DESCRIPTION","UNIT","QTY","RATE (EUR)","AMOUNT (EUR)"]
+    for c,h in enumerate(headers): ws.write(1,c,h,fmt_header)
+    ws.set_column(1,1,45); ws.set_column(4,4,12); ws.set_column(5,5,16)
+    ws.freeze_panes(2,0)
+    return ws
+
+def init_cover_sheet(name, bill1_name, bill2_name, summary_name):
+    ws = wb.add_worksheet(name)
+    ws.merge_range(2, 0, 4, 5, TITLE_TEXT, fmt_cover_big)
+    ws.write(7,0,"Generated from Revit model:", fmt_normal)
+    ws.write(7,3,revit.doc.Title or "Untitled", fmt_normal)
+    ws.write(9,0,"Sheets:", fmt_section)
+    ws.write(10,0,bill1_name, fmt_normal)
+    ws.write(11,0,bill2_name, fmt_normal)
+    ws.write(12,0,summary_name, fmt_normal)
+    return ws
+
+def finalize_bill_sheet(ws, row, sheet_cat_order, cat_subtotals):
+    # COLLECTION
+    ws.write(row, 1, "COLLECTION", fmt_section)
+    row += 1
+    count = 1
+    for cname in sheet_cat_order:
+        up = cname.upper()
+        cell = cat_subtotals.get(up)
+        if cell:
+            ws.write(row, 0, str(count), fmt_normal)
+            ws.write(row, 1, up, fmt_normal)
+            ws.write_formula(row, 5, "={}".format(cell), fmt_money)
+            row += 1
+            count += 1
+    # GRAND TOTAL
+    ws.write_blank(row, 0, None, fmt_section)
+    ws.write(row, 1, "GRAND TOTAL", fmt_section)
+    if cat_subtotals:
+        sum_cells = ",".join(cat_subtotals[k.upper()]
+                             for k in sheet_cat_order if k.upper() in cat_subtotals)
+        ws.write_formula(row, 5, "=SUM({})".format(sum_cells), fmt_money)
+    else:
+        ws.write(row, 5, 0, fmt_money)
+    grand_total_addr = xl_rowcol_to_cell(row, 5)
+    return grand_total_addr, row
+
+# Return a reference string (NO leading "=") for use in formulas
+def _sheet_ref(name, cell_addr):
+    return "'{}'!{}".format(name.replace("'", "''"), cell_addr)
+
+# ------------------------------------------------------------------------------
+# Build workbook structure (sanitized names)
+# ------------------------------------------------------------------------------
+_USED_SHEETS = set()
+COVER_NAME   = _safe_sheet_name("COVER", _USED_SHEETS)
+BILL1_NAME   = _safe_sheet_name("BILL 1 - SUB & SUPERSTRUCTURE", _USED_SHEETS)
+BILL2_NAME   = _safe_sheet_name("BILL 2 - MEP", _USED_SHEETS)
+SUMMARY_NAME = _safe_sheet_name("SUMMARY", _USED_SHEETS)
+
+init_cover_sheet(COVER_NAME, BILL1_NAME, BILL2_NAME, SUMMARY_NAME)
+
+sheets = {
+    BILL1_NAME: {"ws": init_bill_sheet(BILL1_NAME), "row": 2, "cat_counter": 1, "cat_subtotals": {}, "order": []},
+    BILL2_NAME: {"ws": init_bill_sheet(BILL2_NAME), "row": 2, "cat_counter": 1, "cat_subtotals": {}, "order": []},
+}
+
+# Route categories to bills (default to BILL 1)
+BILL_FOR_CATEGORY = {"Electrical": BILL2_NAME, "Plumbing": BILL2_NAME}
+def _bill_for(cat):
+    return BILL_FOR_CATEGORY.get(cat, BILL1_NAME)
+
+# ------------------------------------------------------------------------------
+# Painting helper (walls; parts & fallback supported)
+# ------------------------------------------------------------------------------
 def _gather_wall_painting(doc):
     grouped = {}
 
@@ -219,13 +301,10 @@ def _gather_wall_painting(doc):
     def _collect_from_faces(host_elem, faces):
         for f in faces:
             ref = f.Reference
-            if not ref:
-                continue
-            if not doc.IsPainted(host_elem.Id, ref):
-                continue
+            if not ref: continue
+            if not doc.IsPainted(host_elem.Id, ref): continue
             mid = doc.GetPaintedMaterial(host_elem.Id, ref)
-            if mid == DB.ElementId.InvalidElementId:
-                continue
+            if mid == DB.ElementId.InvalidElementId: continue
             mat = doc.GetElement(mid)
             _add(mat.Name if mat else "Paint", _rate_from_material(mat), f.Area)
 
@@ -234,35 +313,27 @@ def _gather_wall_painting(doc):
              .WhereElementIsNotElementType()
              .ToElements())
 
-    opt = DB.Options()
-    opt.ComputeReferences = True
-    opt.IncludeNonVisibleObjects = False
+    opt = DB.Options(); opt.ComputeReferences = True; opt.IncludeNonVisibleObjects = False
 
     for wall in walls:
         try:
             got_any = False
             try:
                 for side in (DB.ShellLayerType.Interior, DB.ShellLayerType.Exterior):
-                    refs = DB.HostObjectUtils.GetSideFaces(wall, side)
-                    if not refs:
-                        continue
+                    refs = DB.HostObjectUtils.GetSideFaces(wall, side) or []
                     for ref in refs:
-                        if not doc.IsPainted(wall.Id, ref):
-                            continue
+                        if not doc.IsPainted(wall.Id, ref): continue
                         gobj = wall.GetGeometryObjectFromReference(ref)
                         face = gobj if isinstance(gobj, DB.Face) else None
-                        if not face:
-                            continue
+                        if not face: continue
                         mid = doc.GetPaintedMaterial(wall.Id, ref)
-                        if mid == DB.ElementId.InvalidElementId:
-                            continue
+                        if mid == DB.ElementId.InvalidElementId: continue
                         mat = doc.GetElement(mid)
                         _add(mat.Name if mat else "Paint", _rate_from_material(mat), face.Area)
                         got_any = True
             except:
                 pass
-            if got_any:
-                continue
+            if got_any: continue
 
             try:
                 pids = DB.PartUtils.GetAssociatedParts(doc, wall.Id, True, True)
@@ -270,8 +341,7 @@ def _gather_wall_painting(doc):
                     for pid in pids:
                         part = doc.GetElement(pid)
                         geom = part.get_Geometry(opt)
-                        if not geom:
-                            continue
+                        if not geom: continue
                         for g in geom:
                             if isinstance(g, DB.Solid) and g.Faces:
                                 _collect_from_faces(part, list(g.Faces))
@@ -305,55 +375,66 @@ def _gather_wall_painting(doc):
         if abs(v["qty"]) < 1e-6:
             v["qty"] = 0.0
     return grouped
-# -------------------------------------------------------------------------------
 
-# --- Loop over categories in specified order ---
+# ------------------------------------------------------------------------------
+# MAIN: loop over categories and route rows to the right bill
+# ------------------------------------------------------------------------------
+skipped = 0
+
 for cat_name in CATEGORY_ORDER:
+    bill_name = _bill_for(cat_name)
+    ctx = sheets[bill_name]
+    ws = ctx["ws"]
+    row = ctx["row"]
+    cat_counter = ctx["cat_counter"]
+    cat_subtotals = ctx["cat_subtotals"]
+
     bic = CATEGORY_MAP.get(cat_name)
     if not bic:
         continue
 
-    # -------- VIRTUAL CATEGORY: Painting --------
+    # ------ VIRTUAL: Painting ------
     if bic is VIRTUAL_PAINT:
         grouped = _gather_wall_painting(revit.doc)
-
         if grouped:
-            sheet.write(row, 0, str(cat_counter), fmt_section)
-            sheet.write(row, 1, cat_name.upper(), fmt_section)
-            row += 1
-            cat_counter += 1
+            ws.write(row, 0, str(cat_counter), fmt_section)
+            ws.write(row, 1, cat_name.upper(), fmt_section); row += 1; cat_counter += 1
+            ctx["order"].append(cat_name)
 
             if cat_name in CATEGORY_DESCRIPTIONS:
-                sheet.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
+                ws.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
                 row += 1
 
             first_item_row = row
             letters = iter(string.ascii_uppercase)
 
             for name, data in grouped.items():
-                sheet.write(row, 0, next(letters), fmt_normal)
-                sheet.write(row, 1, name,           fmt_normal)
-                sheet.write(row, 2, data["unit"],   fmt_normal)
-                sheet.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
-                sheet.write(row, 4, round(float(data["rate"]), 2), fmt_money)
-                sheet.write_formula(row, 5, "={}*{}".format(
+                ws.write(row, 0, next(letters), fmt_normal)
+                ws.write(row, 1, name,           fmt_normal)
+                ws.write(row, 2, data["unit"],   fmt_normal)
+                ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
+                ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
+                ws.write_formula(row, 5, "={}*{}".format(
                     xl_rowcol_to_cell(row, 3), xl_rowcol_to_cell(row, 4)), fmt_money)
                 row += 1
 
             last_item_row = row - 1
-            sheet.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
+            ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
             if last_item_row >= first_item_row:
                 sum_range = "F{}:F{}".format(first_item_row + 1, last_item_row + 1)
-                sheet.write_formula(row, 5, "=SUM({})".format(sum_range), fmt_money)
+                ws.write_formula(row, 5, "=SUM({})".format(sum_range), fmt_money)
             else:
-                sheet.write(row, 5, 0, fmt_money)
+                ws.write(row, 5, 0, fmt_money)
 
-            category_subtotal_cell[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
+            cat_subtotals[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
             row += 2
-        continue
-    # -------- END VIRTUAL CATEGORY --------
 
-    # Collect elements for this (real) category
+        ctx["row"] = row
+        ctx["cat_counter"] = cat_counter
+        continue
+    # ------ END VIRTUAL ------
+
+    # Collect elements
     if isinstance(bic, list):
         elements = []
         for sub in bic:
@@ -367,12 +448,11 @@ for cat_name in CATEGORY_ORDER:
                     .WhereElementIsNotElementType()
                     .ToElements())
 
-    # Group by TYPE/Display name (aggregate qty)
     grouped = {}
 
     for el in elements:
         try:
-            # ------------------------ NAME (robust fallbacks) ------------------------
+            # -------- NAME (robust) --------
             el_type = revit.doc.GetElement(el.GetTypeId()) if el.GetTypeId() else None
             name = None
             if el_type:
@@ -386,7 +466,7 @@ for cat_name in CATEGORY_ORDER:
             if not name:
                 name = getattr(el, "Name", None) or (el.Category.Name if el.Category else "Item")
 
-            # ------------------------ RATE (type first, then instance) --------------
+            # -------- RATE (type first, then instance) --------
             def _get_cost(o):
                 if not o: return 0.0
                 try:
@@ -399,9 +479,9 @@ for cat_name in CATEGORY_ORDER:
 
             rate = _get_cost(el_type)
             if rate == 0.0:
-                rate = _get_cost(el)  # instance fallback (useful for Furniture Systems)
+                rate = _get_cost(el)  # instance fallback useful for Furniture Systems
 
-            # ------------------------ QTY / UNIT (category rules) -------------------
+            # -------- QTY / UNIT (category rules) --------
             qty  = 1.0
             unit = "No."
 
@@ -454,7 +534,7 @@ for cat_name in CATEGORY_ORDER:
                     elif len_prm and len_prm.HasValue:
                         qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
 
-            # ------------------------ COMMENT (Type Comments only; filter noise) ----
+            # -------- COMMENT (Type Comments only; filter noise) --------
             comment = ""
             if el_type:
                 tc = el_type.LookupParameter("Type Comments")
@@ -465,7 +545,7 @@ for cat_name in CATEGORY_ORDER:
             if comment.strip().lower() == (name or "").strip().lower():
                 comment = ""
 
-            # ------------------------ Aggregate -------------------------------------
+            # -------- Aggregate --------
             if name not in grouped:
                 grouped[name] = {"qty": 0.0, "rate": rate, "unit": unit, "comment": comment}
             grouped[name]["qty"] += qty
@@ -478,71 +558,74 @@ for cat_name in CATEGORY_ORDER:
             skipped += 1
 
     if grouped:
-        sheet.write(row, 0, str(cat_counter), fmt_section)   # ITEM column
-        sheet.write(row, 1, cat_name.upper(), fmt_section)   # DESCRIPTION column
+        ws.write(row, 0, str(cat_counter), fmt_section)   # ITEM
+        ws.write(row, 1, cat_name.upper(), fmt_section)   # DESCRIPTION (section)
         row += 1
         cat_counter += 1
+        ctx["order"].append(cat_name)
 
         if cat_name in CATEGORY_DESCRIPTIONS:
-            sheet.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
+            ws.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
             row += 1
 
         first_item_row = row
 
         letters = iter(string.ascii_uppercase)
         for name, data in grouped.items():
-            sheet.write(row, 0, next(letters), fmt_normal)
-            sheet.write(row, 1, name,           fmt_normal)
-            sheet.write(row, 2, data["unit"],   fmt_normal)
-            sheet.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
-            sheet.write(row, 4, round(float(data["rate"]), 2), fmt_money)
-            sheet.write_formula(row, 5, "={}*{}".format(
+            ws.write(row, 0, next(letters), fmt_normal)
+            ws.write(row, 1, name,           fmt_normal)
+            ws.write(row, 2, data["unit"],   fmt_normal)
+            ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
+            ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
+            ws.write_formula(row, 5, "={}*{}".format(
                 xl_rowcol_to_cell(row, 3), xl_rowcol_to_cell(row, 4)), fmt_money)
             row += 1
 
-            # Only Type Comments (already filtered for noise)
             if data.get("comment"):
-                sheet.write(row, 1, data["comment"], fmt_italic)
+                ws.write(row, 1, data["comment"], fmt_italic)
                 row += 1
 
         last_item_row = row - 1
+        ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
         if last_item_row >= first_item_row:
             sum_range = "F{}:F{}".format(first_item_row + 1, last_item_row + 1)
-            sheet.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
-            sheet.write_formula(row, 5, "=SUM({})".format(sum_range), fmt_money)
-            category_subtotal_cell[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
-            row += 2
+            ws.write_formula(row, 5, "=SUM({})".format(sum_range), fmt_money)
         else:
-            sheet.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
-            sheet.write(row, 5, 0, fmt_money)
-            category_subtotal_cell[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
-            row += 2
+            ws.write(row, 5, 0, fmt_money)
+        ctx["cat_subtotals"][cat_name.upper()] = xl_rowcol_to_cell(row, 5)
+        row += 2
 
-# --- Totals ---
-sheet.write(row, 1, "COLLECTION", fmt_section)
-row += 1
+    # store back row/counter for this sheet
+    ctx["row"] = row
+    ctx["cat_counter"] = cat_counter
 
-# Restart numbering under COLLECTION (title unnumbered)
-collect_counter = 1
-for cname in CATEGORY_ORDER:
-    upper = cname.upper()
-    cell  = category_subtotal_cell.get(upper)
-    if cell:
-        sheet.write(row, 0, str(collect_counter), fmt_normal)
-        sheet.write(row, 1, upper,              fmt_normal)
-        sheet.write_formula(row, 5, "={}".format(cell), fmt_money)
-        row += 1
-        collect_counter += 1
+# ------------------------------------------------------------------------------
+# Finalize bills & create SUMMARY sheet (fixed formulas)
+# ------------------------------------------------------------------------------
+summary_ws = wb.add_worksheet(SUMMARY_NAME)
+summary_ws.merge_range(0, 0, 0, 3, "SUMMARY OF BILLS", fmt_title)
+summary_ws.write(1, 0, "BILL", fmt_header)
+summary_ws.write(1, 3, "AMOUNT (EUR)", fmt_header)
+summary_row = 2
 
-# GRAND TOTAL (unnumbered, aligned under DESCRIPTION)
-sheet.write_blank(row, 0, None, fmt_section)
-sheet.write(row, 1, "GRAND TOTAL", fmt_section)
-if category_subtotal_cell:
-    sum_cells = ",".join(category_subtotal_cell[k.upper()]
-                         for k in CATEGORY_ORDER if k.upper() in category_subtotal_cell)
-    sheet.write_formula(row, 5, "=SUM({})".format(sum_cells), fmt_money)
+grand_refs = []
+
+for bill_name, ctx in sheets.items():
+    ws = ctx["ws"]
+    grand_addr, _ = finalize_bill_sheet(ws, ctx["row"], ctx["order"], ctx["cat_subtotals"])
+    ref = _sheet_ref(bill_name, grand_addr)   # reference only (no "=")
+    summary_ws.write(summary_row, 0, bill_name, fmt_normal)
+    summary_ws.write_formula(summary_row, 3, "=" + ref, fmt_money)  # now a valid formula
+    grand_refs.append(ref)
+    summary_row += 1
+
+# Overall GRAND TOTAL across bills
+summary_ws.write_blank(summary_row, 1, None, fmt_section)
+summary_ws.write(summary_row, 2, "GRAND TOTAL", fmt_section)
+if grand_refs:
+    summary_ws.write_formula(summary_row, 3, "=SUM({})".format(",".join(grand_refs)), fmt_money)
 else:
-    sheet.write(row, 5, 0, fmt_money)
+    summary_ws.write(summary_row, 3, 0, fmt_money)
 
 wb.close()
-MessageBox.Show("BOQ export complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped), "✅ XLSX Export")
+MessageBox.Show("BOQ export (multi-sheet) complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped), "✅ XLSX Export")
