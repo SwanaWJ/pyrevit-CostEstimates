@@ -31,7 +31,7 @@ CATEGORY_ORDER = [
     "Plumbing",
     "Painting",                  # <-- virtual: painted wall faces (all together)
     "Wall and Floor Finishes",
-    "Furniture",                 # <-- NEW: after Wall and Floor Finishes
+    "Furniture",                 # <-- includes Furniture + Furniture Systems
 ]
 
 # Sentinel for virtual categories
@@ -62,7 +62,10 @@ CATEGORY_MAP = {
     ],
     "Painting": VIRTUAL_PAINT,    # <-- handled specially
     "Wall and Floor Finishes": DB.BuiltInCategory.OST_GenericModel,
-    "Furniture": DB.BuiltInCategory.OST_Furniture,  # <-- NEW
+    "Furniture": [
+        DB.BuiltInCategory.OST_Furniture,
+        DB.BuiltInCategory.OST_FurnitureSystems,   # <— added
+    ],
     # Not in order, but you keep it in MAP if you use elsewhere:
     "Ceilings": DB.BuiltInCategory.OST_Ceilings,
 }
@@ -117,7 +120,6 @@ CATEGORY_DESCRIPTIONS = {
     "Painting": (
         "Measured areas from the Revit Paint tool on wall faces (all sides), grouped by material. Rates use the material 'Cost' if present."
     ),
-    # Description for Furniture is optional; unit is 'No.' by default so this can be omitted or customized later
     # "Furniture": "Loose and built-in furniture items as modeled."
 }
 
@@ -352,18 +354,42 @@ for cat_name in CATEGORY_ORDER:
                     .WhereElementIsNotElementType()
                     .ToElements())
 
-    # Group by TYPE name (aggregate qty)
+    # Group by TYPE/Display name (aggregate qty)
     grouped = {}
 
     for el in elements:
         try:
-            el_type = revit.doc.GetElement(el.GetTypeId())
-            name    = el_type.get_Parameter(DB.BuiltInParameter.SYMBOL_NAME_PARAM).AsString()
+            # ------------------------ NAME (robust fallbacks) ------------------------
+            el_type = revit.doc.GetElement(el.GetTypeId()) if el.GetTypeId() else None
+            name = None
+            if el_type:
+                p_name = el_type.get_Parameter(DB.BuiltInParameter.SYMBOL_NAME_PARAM)
+                if p_name and p_name.HasValue:
+                    name = p_name.AsString()
+            if not name:
+                p_ft = el.get_Parameter(DB.BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM)
+                if p_ft and p_ft.HasValue:
+                    name = p_ft.AsValueString()
+            if not name:
+                name = getattr(el, "Name", None) or (el.Category.Name if el.Category else "Item")
 
-            cost_p  = el_type.LookupParameter(PARAM_COST)
-            rate    = cost_p.AsDouble() if cost_p and cost_p.HasValue else 0.0
+            # ------------------------ RATE (type first, then instance) --------------
+            def _get_cost(o):
+                if not o: return 0.0
+                try:
+                    cp = o.LookupParameter(PARAM_COST)
+                    if cp and cp.HasValue:
+                        return float(cp.AsDouble())
+                except:
+                    pass
+                return 0.0
 
-            qty = 1.0
+            rate = _get_cost(el_type)
+            if rate == 0.0:
+                rate = _get_cost(el)
+
+            # ------------------------ QTY / UNIT (category rules) -------------------
+            qty  = 1.0
             unit = "No."
 
             if cat_name == "Block Work in Walls":
@@ -415,16 +441,28 @@ for cat_name in CATEGORY_ORDER:
                     elif len_prm and len_prm.HasValue:
                         qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
 
+            # ------------------------ COMMENT (type, then instance) -----------------
             comment = ""
-            cp = el_type.LookupParameter("Type Comments")
-            if cp and cp.HasValue:
-                comment = cp.AsString()
+            tc = el_type.LookupParameter("Type Comments") if el_type else None
+            if tc and tc.HasValue:
+                comment = tc.AsString()
+            if not comment:
+                ic = el.LookupParameter("Comments")
+                if ic and ic.HasValue:
+                    comment = ic.AsString()
+            if not comment:
+                mk = el.LookupParameter("Mark")
+                if mk and mk.HasValue:
+                    comment = mk.AsString()
 
+            # ------------------------ Aggregate -------------------------------------
             if name not in grouped:
                 grouped[name] = {"qty": 0.0, "rate": rate, "unit": unit, "comment": comment}
             grouped[name]["qty"] += qty
             if grouped[name]["rate"] == 0.0 and rate:
                 grouped[name]["rate"] = rate
+            if comment and not grouped[name].get("comment"):
+                grouped[name]["comment"] = comment
 
         except:
             skipped += 1
