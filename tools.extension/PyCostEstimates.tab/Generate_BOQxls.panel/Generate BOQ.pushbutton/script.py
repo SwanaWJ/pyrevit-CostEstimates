@@ -502,7 +502,7 @@ for cat_name in CATEGORY_ORDER:
 
             # Only Type Comments (already filtered for noise)
             if data.get("comment"):
-                sheet.write(row, 1, u"— " + data["comment"], fmt_italic)
+                sheet.write(row, 1, data["comment"], fmt_italic)
                 row += 1
 
         last_item_row = row - 1
