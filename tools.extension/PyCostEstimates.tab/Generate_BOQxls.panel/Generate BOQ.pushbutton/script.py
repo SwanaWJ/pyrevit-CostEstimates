@@ -14,7 +14,7 @@ desktop = os.path.expanduser("~/Desktop")
 xlsx_path = os.path.join(desktop, "BOQ_Export_From_Model.xlsx")
 
 # --- Parameters ---
-PARAM_COST = "Cost"         # rate on type / material
+PARAM_COST  = "Cost"        # rate on type / material
 PARAM_TOTAL = "Test_1234"   # kept for backward compatibility (not used to write Amount)
 
 # --- Ordered Categories (must match CATEGORY_MAP keys exactly) ---
@@ -64,7 +64,7 @@ CATEGORY_MAP = {
     "Wall and Floor Finishes": DB.BuiltInCategory.OST_GenericModel,
     "Furniture": [
         DB.BuiltInCategory.OST_Furniture,
-        DB.BuiltInCategory.OST_FurnitureSystems,   # <— added
+        DB.BuiltInCategory.OST_FurnitureSystems,   # added
     ],
     # Not in order, but you keep it in MAP if you use elsewhere:
     "Ceilings": DB.BuiltInCategory.OST_Ceilings,
@@ -183,7 +183,20 @@ category_subtotal_cell = {}
 # >>> Category numbering counter
 cat_counter = 1
 
-# ---------------------- PAINTING helper (walls; parts & fallback supported) ----------------------
+# -------- comment helpers (Fix B) --------------------------------------------
+def _is_noise(s):
+    s = (s or "").strip()
+    if not s:
+        return True
+    s2 = s.replace(".", "").replace(",", "").replace(" ", "")
+    if s2.isdigit():
+        return True
+    if len(s) < 3:
+        return True
+    return False
+# -----------------------------------------------------------------------------
+
+# ---------------------- PAINTING helper (walls; parts & fallback supported) ---
 def _gather_wall_painting(doc):
     grouped = {}
 
@@ -386,7 +399,7 @@ for cat_name in CATEGORY_ORDER:
 
             rate = _get_cost(el_type)
             if rate == 0.0:
-                rate = _get_cost(el)
+                rate = _get_cost(el)  # instance fallback (useful for Furniture Systems)
 
             # ------------------------ QTY / UNIT (category rules) -------------------
             qty  = 1.0
@@ -441,19 +454,16 @@ for cat_name in CATEGORY_ORDER:
                     elif len_prm and len_prm.HasValue:
                         qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
 
-            # ------------------------ COMMENT (type, then instance) -----------------
+            # ------------------------ COMMENT (Type Comments only; filter noise) ----
             comment = ""
-            tc = el_type.LookupParameter("Type Comments") if el_type else None
-            if tc and tc.HasValue:
-                comment = tc.AsString()
-            if not comment:
-                ic = el.LookupParameter("Comments")
-                if ic and ic.HasValue:
-                    comment = ic.AsString()
-            if not comment:
-                mk = el.LookupParameter("Mark")
-                if mk and mk.HasValue:
-                    comment = mk.AsString()
+            if el_type:
+                tc = el_type.LookupParameter("Type Comments")
+                if tc and tc.HasValue:
+                    comment = tc.AsString() or ""
+            if _is_noise(comment):
+                comment = ""
+            if comment.strip().lower() == (name or "").strip().lower():
+                comment = ""
 
             # ------------------------ Aggregate -------------------------------------
             if name not in grouped:
@@ -490,8 +500,9 @@ for cat_name in CATEGORY_ORDER:
                 xl_rowcol_to_cell(row, 3), xl_rowcol_to_cell(row, 4)), fmt_money)
             row += 1
 
-            if data["comment"]:
-                sheet.write(row, 1, data["comment"], fmt_italic)
+            # Only Type Comments (already filtered for noise)
+            if data.get("comment"):
+                sheet.write(row, 1, u"— " + data["comment"], fmt_italic)
                 row += 1
 
         last_item_row = row - 1
