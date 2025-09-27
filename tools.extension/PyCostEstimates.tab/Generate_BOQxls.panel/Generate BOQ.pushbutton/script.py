@@ -136,15 +136,16 @@ FT_TO_M   = 0.3048
 # ------------------------------------------------------------------------------
 wb = xlsxwriter.Workbook(xlsx_path)
 
-font = 'Century Gothic'
+font = 'Arial Narrow'
 def col_fmt(bold=False, italic=False, underline=False, wrap=False, num_fmt=None):
-    fmt = {'valign':'top','font_name':font,'border':1}
-    if bold: fmt['bold']=True
-    if italic: fmt['italic']=True
-    if underline: fmt['underline']=True
-    if wrap: fmt['text_wrap']=True
-    if num_fmt: fmt['num_format']=num_fmt
+    fmt = {'valign': 'top', 'font_name': font, 'font_size': 12, 'border': 1}  # ← added font_size: 12
+    if bold: fmt['bold'] = True
+    if italic: fmt['italic'] = True
+    if underline: fmt['underline'] = True
+    if wrap: fmt['text_wrap'] = True
+    if num_fmt: fmt['num_format'] = num_fmt
     return wb.add_format(fmt)
+
 
 fmt_header      = col_fmt(bold=True)
 fmt_section     = col_fmt(bold=True)
@@ -152,8 +153,8 @@ fmt_description = col_fmt(italic=True, underline=True, wrap=True)
 fmt_normal      = col_fmt()
 fmt_italic      = col_fmt(italic=True, wrap=True)
 fmt_money       = col_fmt(num_fmt='#,##0.00')
-fmt_title       = wb.add_format({'bold': True, 'font_name': font, 'font_size': 16, 'align':'left'})
-fmt_cover_big   = wb.add_format({'bold': True, 'font_name': font, 'font_size': 20, 'align':'center'})
+fmt_title       = wb.add_format({'bold': True, 'font_name': font, 'font_size': 12, 'align':'left'})
+fmt_cover_big   = wb.add_format({'bold': True, 'font_name': font, 'font_size': 12, 'align':'center'})
 
 # ------------------------------------------------------------------------------
 # Title and helpers
