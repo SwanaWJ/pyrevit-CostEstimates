@@ -151,7 +151,6 @@ try:
 except AttributeError:
     pass
 
-
 font = 'Arial Narrow'
 def col_fmt(bold=False, italic=False, underline=False, wrap=False, num_fmt=None):
     fmt = {'valign': 'top', 'font_name': font, 'font_size': 12, 'border': 1}
@@ -631,35 +630,136 @@ for cat_name in CATEGORY_ORDER:
 
 
 # ------------------------------------------------------------------------------
-# Finalize bills & create GENERAL SUMMARY (colored tab + fixed formulas)
+# Finalize bills & create GENERAL SUMMARY (layout like screenshot)
 # ------------------------------------------------------------------------------
-summary_ws = wb.add_worksheet(SUMMARY_NAME)
-summary_ws.set_tab_color(TAB_COLORS["SUMMARY"])
-summary_ws.merge_range(0, 0, 0, 3, "GENERAL SUMMARY OF BILLS", fmt_title)
-summary_ws.write(1, 0, "BILL", fmt_header)
-summary_ws.write(1, 3, "AMOUNT (EUR)", fmt_header)
-summary_ws.set_column(0, 0, 34)   # BILL
-summary_ws.set_column(3, 3, 16)   # AMOUNT (EUR)
+ORDERED_BILLS = [BILL1_NAME, BILL2_NAME]
+bill_grand_refs = []
 
-summary_row = 2
-grand_refs = []
-
-for bill_name, ctx in sheets.items():
+for bill_name in ORDERED_BILLS:
+    ctx = sheets[bill_name]
     ws = ctx["ws"]
     grand_addr, _ = finalize_bill_sheet(ws, ctx["row"], ctx["order"], ctx["cat_subtotals"])
-    ref = _sheet_ref(bill_name, grand_addr)   # reference only (no "=")
-    summary_ws.write(summary_row, 0, bill_name, fmt_normal)
-    summary_ws.write_formula(summary_row, 3, "=" + ref, fmt_money)  # now a valid formula
-    grand_refs.append(ref)
-    summary_row += 1
+    bill_grand_refs.append(_sheet_ref(bill_name, grand_addr))
 
-# Overall GRAND TOTAL across bills
-summary_ws.write_blank(summary_row, 1, None, fmt_section)
-summary_ws.write(summary_row, 2, "GRAND TOTAL", fmt_section)
-if grand_refs:
-    summary_ws.write_formula(summary_row, 3, "=SUM({})".format(",".join(grand_refs)), fmt_money)
+summary_ws = wb.add_worksheet(SUMMARY_NAME)
+summary_ws.set_tab_color(TAB_COLORS["SUMMARY"])
+
+summary_ws.set_column(0, 0, 6)    # ITEM
+summary_ws.set_column(1, 1, 60)   # DESCRIPTION
+summary_ws.set_column(2, 2, 4)    # €
+summary_ws.set_column(3, 3, 18)   # AMOUNT
+
+fmt_center = wb.add_format({'font_name': font, 'font_size': 12, 'align': 'center',
+                            'valign': 'vcenter', 'border': 1, 'bold': True})
+fmt_text   = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1})
+fmt_wrap   = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'text_wrap': True, 'valign': 'top'})
+fmt_bold   = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'bold': True})
+fmt_percent = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '0.00%'})
+fmt_right  = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'align': 'right'})
+fmt_money_right = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '#,##0.00', 'align': 'right'})
+fmt_noborder = wb.add_format({'font_name': font, 'font_size': 12})  # <--- NO BORDER for padding rows
+
+summary_ws.merge_range(0, 0, 0, 3, "GENERAL SUMMARY", fmt_center)
+summary_ws.write(1, 0, "ITEM", fmt_header)
+summary_ws.write(1, 1, "DESCRIPTION", fmt_header)
+summary_ws.write(1, 2, "", fmt_header)
+summary_ws.write(1, 3, "AMOUNT (EUR)", fmt_header)
+
+row = 2
+
+summary_ws.merge_range(row, 1, row, 3, _get_project_title().upper(), fmt_bold)
+row += 2
+
+CURRENCY_SYM = "€"
+
+for idx, (bill_name, ref) in enumerate(zip(ORDERED_BILLS, bill_grand_refs), start=1):
+    label_tail = bill_name.split(" - ", 1)[-1].upper() if " - " in bill_name else bill_name.upper()
+    summary_ws.write(row, 1, "BILL No. {}: {}".format(idx, label_tail), fmt_text)
+    summary_ws.write(row, 2, CURRENCY_SYM, fmt_text)
+    summary_ws.write_formula(row, 3, "=" + ref, fmt_money_right)
+    row += 1
+
+sub1_row = row
+summary_ws.write_blank(row, 0, None, fmt_text)
+summary_ws.write(row, 1, "Sub total 1", fmt_bold)
+summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
+if bill_grand_refs:
+    summary_ws.write_formula(row, 3, "=SUM({})".format(",".join(bill_grand_refs)), fmt_money_right)
 else:
-    summary_ws.write(summary_row, 3, 0, fmt_money)
+    summary_ws.write(row, 3, 0, fmt_money_right)
+row += 2
+
+disc_text = ("Should the Contractor desire to make any discount on the above total, "
+             "it is to be made here and the amount will be treated as a percentage of "
+             "the total as above. The rates inserted by the contractor against the "
+             "items throughout this tender will be adjusted accordingly by this "
+             "percentage during project execution")
+disc_top = row
+disc_bottom = row + 5
+summary_ws.merge_range(disc_top, 1, disc_bottom, 1, disc_text, fmt_wrap)
+summary_ws.write(disc_top, 2, "%", fmt_center)
+summary_ws.write(disc_top + 1, 2, 0, fmt_percent)
+discount_cell = xl_rowcol_to_cell(disc_top + 1, 2)
+
+row = disc_bottom + 1
+sub2_row = row
+summary_ws.write_blank(row, 0, None, fmt_text)
+summary_ws.write(row, 1, "Sub total 2", fmt_bold)
+summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
+summary_ws.write_formula(row, 3, "={}*(1-{})".format(xl_rowcol_to_cell(sub1_row, 3), discount_cell), fmt_money_right)
+row += 1
+
+CONTINGENCY_RATE = 0.05
+summary_ws.write(row, 1, "Allow for contingencies @ {}%".format(int(CONTINGENCY_RATE*100)), fmt_text)
+summary_ws.write_blank(row, 2, None, fmt_text)
+summary_ws.write_formula(row, 3, "={}*{}".format(xl_rowcol_to_cell(sub2_row, 3), CONTINGENCY_RATE), fmt_money_right)
+contingency_row = row
+row += 1
+
+sub3_row = row
+summary_ws.write_blank(row, 0, None, fmt_text)
+summary_ws.write(row, 1, "Sub total 3", fmt_bold)
+summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
+summary_ws.write_formula(row, 3, "={}+{}".format(xl_rowcol_to_cell(sub2_row, 3),
+                                                 xl_rowcol_to_cell(contingency_row, 3)), fmt_money_right)
+row += 1
+
+summary_ws.write(row, 1, "Add VAT OR TOT, whichever is applicable", fmt_text)
+summary_ws.write(row, 2, "", fmt_text)
+summary_ws.write(row, 3, "Inclusive", fmt_text)
+row += 1
+
+summary_ws.write(row, 1, "GRAND TOTAL CARRIED TO FORM OF TENDER", fmt_bold)
+summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
+summary_ws.write_formula(row, 3, "={}".format(xl_rowcol_to_cell(sub3_row, 3)), fmt_money_right)
+row += 1
+
+# ---------- Signature block pinned to bottom of Page 1 (no-border padding) ----------
+FIRST_PAGE_LAST_ROW = 47   # 1-based
+SIG_BLOCK_HEIGHT    = 4
+
+summary_ws.set_landscape()
+summary_ws.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.8)
+summary_ws.fit_to_pages(1, 1)
+
+sig_top_row_1based = FIRST_PAGE_LAST_ROW - SIG_BLOCK_HEIGHT + 1
+sig_top_row_0based = sig_top_row_1based - 1
+
+# No-border padding rows:
+while row < sig_top_row_0based:
+    summary_ws.write_blank(row, 0, None, fmt_noborder)
+    summary_ws.write_blank(row, 1, None, fmt_noborder)
+    summary_ws.write_blank(row, 2, None, fmt_noborder)
+    summary_ws.write_blank(row, 3, None, fmt_noborder)
+    row += 1
+
+# Signature lines
+summary_ws.write(row,   1, "Signature of Contractor .................................................................", fmt_text); row += 1
+summary_ws.write(row,   1, "Name of Firm: ..............................................................................", fmt_text); row += 1
+summary_ws.write(row,   1, "Address: ...................................................................................", fmt_text); row += 1
+summary_ws.write(row,   1, "Date: ......................................................................................", fmt_text); row += 1
+
+summary_ws.set_h_pagebreaks([FIRST_PAGE_LAST_ROW])
 
 wb.close()
 MessageBox.Show(
