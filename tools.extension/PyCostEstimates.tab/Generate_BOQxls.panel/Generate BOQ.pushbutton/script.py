@@ -170,6 +170,16 @@ fmt_money       = col_fmt(num_fmt='#,##0.00')
 fmt_title       = wb.add_format({'bold': True, 'font_name': font, 'font_size': 12, 'align':'left'})
 fmt_cover_big   = wb.add_format({'bold': True, 'font_name': font, 'font_size': 12, 'align':'center'})
 
+# Additional cover formats
+fmt_cover_huge  = wb.add_format({'bold': True, 'font_name': font, 'font_size': 16, 'align': 'center'})
+fmt_center      = wb.add_format({'font_name': font, 'font_size': 12, 'align': 'center', 'valign': 'vcenter', 'border': 1})
+fmt_text        = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1})
+fmt_bold        = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'bold': True})
+fmt_wrap        = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'text_wrap': True, 'valign': 'top'})
+fmt_percent     = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '0.00%'})
+fmt_money_right = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '#,##0.00', 'align': 'right'})
+fmt_noborder    = wb.add_format({'font_name': font, 'font_size': 12})
+
 
 # ------------------------------------------------------------------------------
 # Title and helpers
@@ -187,6 +197,16 @@ def _get_project_title():
         except Exception:
             pname = "PROJECT"
     return pname
+
+def _get_project_address():
+    pi = revit.doc.ProjectInformation
+    addr = None
+    p = pi.get_Parameter(DB.BuiltInParameter.PROJECT_ADDRESS) if pi else None
+    if p and p.HasValue:
+        addr = p.AsString()
+    if not addr:
+        addr = "PROJECT ADDRESS"
+    return addr
 
 TITLE_TEXT = "BILL OF QUANTITIES (BOQ) FOR THE CONSTRUCTION OF {}".format(_get_project_title().upper())
 
@@ -228,8 +248,14 @@ def _item_label(idx):
 # ------------------------------------------------------------------------------
 # Sheet creation helpers
 # ------------------------------------------------------------------------------
+def _set_portrait(ws):
+    ws.set_paper(9)          # A4
+    ws.set_portrait()
+    ws.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.8)
+
 def init_bill_sheet(name):
     ws = wb.add_worksheet(name)
+    _set_portrait(ws)
     ws.merge_range(0, 0, 0, 5, TITLE_TEXT, fmt_title)
     headers = ["ITEM","DESCRIPTION","UNIT","QTY","RATE (EUR)","AMOUNT (EUR)"]
     for c,h in enumerate(headers):
@@ -238,15 +264,25 @@ def init_bill_sheet(name):
     ws.freeze_panes(2,0)
     return ws
 
-def init_cover_sheet(name, bill1_name, bill2_name, summary_name):
+def init_cover_sheet(name):
     ws = wb.add_worksheet(name)
-    ws.merge_range(2, 0, 4, 5, TITLE_TEXT, fmt_cover_big)
-    ws.write(7,0,"Generated from Revit model:", fmt_normal)
-    ws.write(7,3,revit.doc.Title or "Untitled", fmt_normal)
-    ws.write(9,0,"Sheets:", fmt_section)
-    ws.write(10,0,bill1_name, fmt_normal)
-    ws.write(11,0,bill2_name, fmt_normal)
-    ws.write(12,0,summary_name, fmt_normal)
+    _set_portrait(ws)
+
+    # column widths
+    ws.set_column("B:D", 50)
+    # a few taller rows for spacing
+    ws.set_row(8,  28)
+    ws.set_row(15, 28)
+    ws.set_row(19, 28)
+    ws.set_row(21, 24)
+
+    # CONTENT (matches your screenshot)
+    ws.merge_range("B9:D9",  "DEPARTMENT OF HOUSING AND INFRASTRUCTURE DEVELOPMENT", fmt_cover_huge)
+    ws.merge_range("B15:D15", "BILL OF QUANTITIES", fmt_cover_huge)
+    ws.merge_range("B17:D17", "FOR THE", fmt_text)
+    ws.merge_range("B19:D19", TITLE_TEXT, fmt_cover_huge)
+    ws.merge_range("B21:D21", "AT {}".format(_get_project_address().upper()), fmt_text)
+
     return ws
 
 def finalize_bill_sheet(ws, row, sheet_cat_order, cat_subtotals):
@@ -288,7 +324,7 @@ BILL1_NAME   = _safe_sheet_name("BILL 1 - SUB & SUPERSTRUCTURE", _USED_SHEETS)
 BILL2_NAME   = _safe_sheet_name("BILL 2 - MEP", _USED_SHEETS)
 SUMMARY_NAME = _safe_sheet_name("GENERAL SUMMARY", _USED_SHEETS)
 
-cover_ws = init_cover_sheet(COVER_NAME, BILL1_NAME, BILL2_NAME, SUMMARY_NAME)
+cover_ws = init_cover_sheet(COVER_NAME)
 cover_ws.set_tab_color(TAB_COLORS["COVER"])
 
 sheets = {
@@ -630,7 +666,7 @@ for cat_name in CATEGORY_ORDER:
 
 
 # ------------------------------------------------------------------------------
-# Finalize bills & create GENERAL SUMMARY (layout like screenshot)
+# Finalize bills & create GENERAL SUMMARY (portrait, signature pinned at bottom)
 # ------------------------------------------------------------------------------
 ORDERED_BILLS = [BILL1_NAME, BILL2_NAME]
 bill_grand_refs = []
@@ -642,35 +678,25 @@ for bill_name in ORDERED_BILLS:
     bill_grand_refs.append(_sheet_ref(bill_name, grand_addr))
 
 summary_ws = wb.add_worksheet(SUMMARY_NAME)
+_set_portrait(summary_ws)
 summary_ws.set_tab_color(TAB_COLORS["SUMMARY"])
 
 summary_ws.set_column(0, 0, 6)    # ITEM
 summary_ws.set_column(1, 1, 60)   # DESCRIPTION
-summary_ws.set_column(2, 2, 4)    # €
+summary_ws.set_column(2, 2, 4)    # K
 summary_ws.set_column(3, 3, 18)   # AMOUNT
-
-fmt_center = wb.add_format({'font_name': font, 'font_size': 12, 'align': 'center',
-                            'valign': 'vcenter', 'border': 1, 'bold': True})
-fmt_text   = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1})
-fmt_wrap   = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'text_wrap': True, 'valign': 'top'})
-fmt_bold   = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'bold': True})
-fmt_percent = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '0.00%'})
-fmt_right  = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'align': 'right'})
-fmt_money_right = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '#,##0.00', 'align': 'right'})
-fmt_noborder = wb.add_format({'font_name': font, 'font_size': 12})  # <--- NO BORDER for padding rows
 
 summary_ws.merge_range(0, 0, 0, 3, "GENERAL SUMMARY", fmt_center)
 summary_ws.write(1, 0, "ITEM", fmt_header)
 summary_ws.write(1, 1, "DESCRIPTION", fmt_header)
 summary_ws.write(1, 2, "", fmt_header)
-summary_ws.write(1, 3, "AMOUNT (EUR)", fmt_header)
+summary_ws.write(1, 3, "AMOUNT (ZMW)", fmt_header)
 
 row = 2
-
 summary_ws.merge_range(row, 1, row, 3, _get_project_title().upper(), fmt_bold)
 row += 2
 
-CURRENCY_SYM = "€"
+CURRENCY_SYM = "K"
 
 for idx, (bill_name, ref) in enumerate(zip(ORDERED_BILLS, bill_grand_refs), start=1):
     label_tail = bill_name.split(" - ", 1)[-1].upper() if " - " in bill_name else bill_name.upper()
@@ -734,18 +760,12 @@ summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
 summary_ws.write_formula(row, 3, "={}".format(xl_rowcol_to_cell(sub3_row, 3)), fmt_money_right)
 row += 1
 
-# ---------- Signature block pinned to bottom of Page 1 (no-border padding) ----------
-FIRST_PAGE_LAST_ROW = 47   # 1-based
+# Signature block pinned to bottom of page 1, with *no borders* above it
+FIRST_PAGE_LAST_ROW = 47   # 1-based page-break row
 SIG_BLOCK_HEIGHT    = 4
+sig_top_row_1based  = FIRST_PAGE_LAST_ROW - SIG_BLOCK_HEIGHT + 1
+sig_top_row_0based  = sig_top_row_1based - 1
 
-summary_ws.set_landscape()
-summary_ws.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.8)
-summary_ws.fit_to_pages(1, 1)
-
-sig_top_row_1based = FIRST_PAGE_LAST_ROW - SIG_BLOCK_HEIGHT + 1
-sig_top_row_0based = sig_top_row_1based - 1
-
-# No-border padding rows:
 while row < sig_top_row_0based:
     summary_ws.write_blank(row, 0, None, fmt_noborder)
     summary_ws.write_blank(row, 1, None, fmt_noborder)
@@ -753,7 +773,6 @@ while row < sig_top_row_0based:
     summary_ws.write_blank(row, 3, None, fmt_noborder)
     row += 1
 
-# Signature lines
 summary_ws.write(row,   1, "Signature of Contractor .................................................................", fmt_text); row += 1
 summary_ws.write(row,   1, "Name of Firm: ..............................................................................", fmt_text); row += 1
 summary_ws.write(row,   1, "Address: ...................................................................................", fmt_text); row += 1
@@ -761,6 +780,10 @@ summary_ws.write(row,   1, "Date: ..............................................
 
 summary_ws.set_h_pagebreaks([FIRST_PAGE_LAST_ROW])
 
+
+# ------------------------------------------------------------------------------
+# Close and notify
+# ------------------------------------------------------------------------------
 wb.close()
 MessageBox.Show(
     "BOQ export (multi-sheet) complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped),
