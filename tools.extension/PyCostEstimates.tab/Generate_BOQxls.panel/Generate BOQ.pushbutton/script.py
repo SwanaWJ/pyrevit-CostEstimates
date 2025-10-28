@@ -175,6 +175,14 @@ fmt_percent     = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1
 fmt_money_right = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '#,##0.00', 'align': 'right'})
 fmt_noborder    = wb.add_format({'font_name': font, 'font_size': 12})
 
+# NEW: centered non-bordered cover text (for "FOR THE" and "AT ...")
+fmt_text_center = wb.add_format({
+    'font_name': font,
+    'font_size': 12,
+    'align': 'center',
+    'valign': 'vcenter'
+})
+
 # ------------------------------------------------------------------------------
 # Title/helpers
 # ------------------------------------------------------------------------------
@@ -206,20 +214,27 @@ TITLE_TEXT = "BILL OF QUANTITIES (BOQ) FOR THE CONSTRUCTION OF {}".format(_get_p
 
 def _safe_sheet_name(name, used):
     s = name.replace(u"–", "-").replace(u"—", "-")
-    for ch in '[]:*?/\\': s = s.replace(ch, "")
+    for ch in '[]:*?/\\':
+        s = s.replace(ch, "")
     s = s.strip().strip("'")[:31]
-    base = s; i = 1
+    base = s
+    i = 1
     while s in used:
         suf = "({})".format(i)
-        s = (base[:31-len(suf)] + suf); i += 1
-    used.add(s); return s
+        s = (base[:31-len(suf)] + suf)
+        i += 1
+    used.add(s)
+    return s
 
 def _is_noise(s):
     s = (s or "").strip()
-    if not s: return True
+    if not s:
+        return True
     s2 = s.replace(".", "").replace(",", "").replace(" ", "")
-    if s2.isdigit(): return True
-    if len(s) < 3: return True
+    if s2.isdigit():
+        return True
+    if len(s) < 3:
+        return True
     return False
 
 def _item_label(idx):
@@ -229,43 +244,102 @@ def _item_label(idx):
 # Sheet creation
 # ------------------------------------------------------------------------------
 def _set_portrait(ws):
-    ws.set_paper(9); ws.set_portrait()
+    ws.set_paper(9)
+    ws.set_portrait()
     ws.set_margins(left=0.5, right=0.5, top=0.5, bottom=0.8)
 
 def init_bill_sheet(name):
-    ws = wb.add_worksheet(name); _set_portrait(ws)
+    ws = wb.add_worksheet(name)
+    _set_portrait(ws)
+
     ws.merge_range(0, 0, 0, 5, TITLE_TEXT, fmt_title)
-    for c,h in enumerate(["ITEM","DESCRIPTION","UNIT","QTY","RATE (EUR)","AMOUNT (EUR)"]):
+
+    headers = ["ITEM", "DESCRIPTION", "UNIT", "QTY", "RATE (EUR)", "AMOUNT (EUR)"]
+    for c, h in enumerate(headers):
         ws.write(1, c, h, fmt_header)
-    ws.set_column(1,1,45); ws.set_column(4,4,12); ws.set_column(5,5,16)
-    ws.freeze_panes(2,0); return ws
+
+    ws.set_column(1, 1, 45)
+    ws.set_column(4, 4, 12)
+    ws.set_column(5, 5, 16)
+
+    ws.freeze_panes(2, 0)
+    return ws
 
 def init_cover_sheet(name):
-    ws = wb.add_worksheet(name); _set_portrait(ws)
-    ws.set_column("B:D", 50); ws.set_row(8,28); ws.set_row(15,28); ws.set_row(19,28); ws.set_row(21,24)
-    ws.merge_range("B9:D9","DEPARTMENT OF HOUSING AND INFRASTRUCTURE DEVELOPMENT",fmt_cover_huge)
-    ws.merge_range("B15:D15","BILL OF QUANTITIES",fmt_cover_huge)
-    ws.merge_range("B17:D17","FOR THE",fmt_text)
-    ws.merge_range("B19:D19",TITLE_TEXT,fmt_cover_huge)
-    ws.merge_range("B21:D21","AT {}".format(_get_project_address().upper()),fmt_text)
+    ws = wb.add_worksheet(name)
+    _set_portrait(ws)
+
+    # column widths and row heights
+    ws.set_column("B:D", 50)
+    ws.set_row(8, 28)
+    ws.set_row(15, 28)
+    ws.set_row(19, 28)
+    ws.set_row(21, 24)
+
+    # Ministry / Dept
+    ws.merge_range(
+        "B9:D9",
+        "DEPARTMENT OF HOUSING AND INFRASTRUCTURE DEVELOPMENT",
+        fmt_cover_huge
+    )
+
+    # "BILL OF QUANTITIES"
+    ws.merge_range(
+        "B15:D15",
+        "BILL OF QUANTITIES",
+        fmt_cover_huge
+    )
+
+    # "FOR THE" (now centered)
+    ws.merge_range(
+        "B17:D17",
+        "FOR THE",
+        fmt_text_center
+    )
+
+    # Project title
+    ws.merge_range(
+        "B19:D19",
+        TITLE_TEXT,
+        fmt_cover_huge
+    )
+
+    # "AT <ADDRESS>" (now centered)
+    ws.merge_range(
+        "B21:D21",
+        "AT {}".format(_get_project_address().upper()),
+        fmt_text_center
+    )
+
     return ws
 
 def finalize_bill_sheet(ws, row, sheet_cat_order, cat_subtotals):
-    ws.write(row,1,"COLLECTION",fmt_section); row += 1
+    ws.write(row, 1, "COLLECTION", fmt_section)
+    row += 1
     count = 1
     for cname in sheet_cat_order:
-        up = cname.upper(); cell = cat_subtotals.get(up)
+        up = cname.upper()
+        cell = cat_subtotals.get(up)
         if cell:
-            ws.write(row,0,str(count),fmt_normal); ws.write(row,1,up,fmt_normal)
-            ws.write_formula(row,5,"={}".format(cell),fmt_money)
-            row += 1; count += 1
-    ws.write_blank(row,0,None,fmt_section); ws.write(row,1,"GRAND TOTAL",fmt_section)
+            ws.write(row, 0, str(count), fmt_normal)
+            ws.write(row, 1, up, fmt_normal)
+            ws.write_formula(row, 5, "={}".format(cell), fmt_money)
+            row += 1
+            count += 1
+
+    ws.write_blank(row, 0, None, fmt_section)
+    ws.write(row, 1, "GRAND TOTAL", fmt_section)
     if cat_subtotals:
-        sum_cells = ",".join(cat_subtotals[k.upper()] for k in sheet_cat_order if k.upper() in cat_subtotals)
-        ws.write_formula(row,5,"=SUM({})".format(sum_cells),fmt_money)
+        sum_cells = ",".join(
+            cat_subtotals[k.upper()]
+            for k in sheet_cat_order
+            if k.upper() in cat_subtotals
+        )
+        ws.write_formula(row, 5, "=SUM({})".format(sum_cells), fmt_money)
     else:
-        ws.write(row,5,0,fmt_money)
-    return xl_rowcol_to_cell(row,5), row
+        ws.write(row, 5, 0, fmt_money)
+
+    return xl_rowcol_to_cell(row, 5), row
 
 def _sheet_ref(name, cell_addr):
     return "'{}'!{}".format(name.replace("'", "''"), cell_addr)
@@ -279,71 +353,128 @@ BILL1_NAME   = _safe_sheet_name("BILL 1 - SUB & SUPERSTRUCTURE", _USED_SHEETS)
 BILL2_NAME   = _safe_sheet_name("BILL 2 - MEP", _USED_SHEETS)
 SUMMARY_NAME = _safe_sheet_name("GENERAL SUMMARY", _USED_SHEETS)
 
-cover_ws = init_cover_sheet(COVER_NAME); cover_ws.set_tab_color(TAB_COLORS["COVER"])
+cover_ws = init_cover_sheet(COVER_NAME)
+cover_ws.set_tab_color(TAB_COLORS["COVER"])
+
 sheets = {
-    BILL1_NAME: {"ws": init_bill_sheet(BILL1_NAME), "row": 2, "cat_counter": 1, "cat_subtotals": {}, "order": []},
-    BILL2_NAME: {"ws": init_bill_sheet(BILL2_NAME), "row": 2, "cat_counter": 1, "cat_subtotals": {}, "order": []},
+    BILL1_NAME: {
+        "ws": init_bill_sheet(BILL1_NAME),
+        "row": 2,
+        "cat_counter": 1,
+        "cat_subtotals": {},
+        "order": []
+    },
+    BILL2_NAME: {
+        "ws": init_bill_sheet(BILL2_NAME),
+        "row": 2,
+        "cat_counter": 1,
+        "cat_subtotals": {},
+        "order": []
+    },
 }
+
 sheets[BILL1_NAME]["ws"].set_tab_color(TAB_COLORS["BILL1"])
 sheets[BILL2_NAME]["ws"].set_tab_color(TAB_COLORS["BILL2"])
 
-BILL_FOR_CATEGORY = {"Electrical": BILL2_NAME, "Plumbing": BILL2_NAME}
-def _bill_for(cat): return BILL_FOR_CATEGORY.get(cat, BILL1_NAME)
+BILL_FOR_CATEGORY = {
+    "Electrical": BILL2_NAME,
+    "Plumbing": BILL2_NAME
+}
+def _bill_for(cat):
+    return BILL_FOR_CATEGORY.get(cat, BILL1_NAME)
 
 # ------------------------------------------------------------------------------
 # Painting helper
 # ------------------------------------------------------------------------------
 def _gather_wall_painting(doc):
     grouped = {}
+
     def _add(material_name, rate, area_ft2):
         key = "Paint - {}".format(material_name or "Paint")
         qty_m2 = float(area_ft2) * FT2_TO_M2
         if key not in grouped:
-            grouped[key] = {"qty": 0.0, "rate": float(rate or 0.0), "unit": "m²", "comment": ""}
+            grouped[key] = {
+                "qty": 0.0,
+                "rate": float(rate or 0.0),
+                "unit": "m²",
+                "comment": ""
+            }
         grouped[key]["qty"] += qty_m2
         if grouped[key]["rate"] == 0.0 and rate:
             grouped[key]["rate"] = float(rate)
+
     def _rate_from_material(mat):
         try:
             p = mat.LookupParameter(PARAM_COST) if mat else None
             return float(p.AsDouble()) if (p and p.HasValue) else 0.0
-        except: return 0.0
+        except:
+            return 0.0
+
     def _collect_from_faces(host_elem, faces):
         for f in faces:
             ref = f.Reference
-            if not ref or not doc.IsPainted(host_elem.Id, ref): continue
+            if not ref or not doc.IsPainted(host_elem.Id, ref):
+                continue
             mid = doc.GetPaintedMaterial(host_elem.Id, ref)
-            if mid == DB.ElementId.InvalidElementId: continue
+            if mid == DB.ElementId.InvalidElementId:
+                continue
             mat = doc.GetElement(mid)
-            _add(mat.Name if mat else "Paint", _rate_from_material(mat), f.Area)
-    walls = (DB.FilteredElementCollector(doc)
-             .OfCategory(DB.BuiltInCategory.OST_Walls)
-             .WhereElementIsNotElementType().ToElements())
-    opt = DB.Options(); opt.ComputeReferences = True; opt.IncludeNonVisibleObjects = False
+            _add(
+                mat.Name if mat else "Paint",
+                _rate_from_material(mat),
+                f.Area
+            )
+
+    walls = (
+        DB.FilteredElementCollector(doc)
+        .OfCategory(DB.BuiltInCategory.OST_Walls)
+        .WhereElementIsNotElementType()
+        .ToElements()
+    )
+
+    opt = DB.Options()
+    opt.ComputeReferences = True
+    opt.IncludeNonVisibleObjects = False
+
     for wall in walls:
         try:
             got_any = False
+            # Try side faces first
             try:
                 for side in (DB.ShellLayerType.Interior, DB.ShellLayerType.Exterior):
                     refs = DB.HostObjectUtils.GetSideFaces(wall, side) or []
                     for ref in refs:
-                        if not doc.IsPainted(wall.Id, ref): continue
+                        if not doc.IsPainted(wall.Id, ref):
+                            continue
                         gobj = wall.GetGeometryObjectFromReference(ref)
                         face = gobj if isinstance(gobj, DB.Face) else None
-                        if not face: continue
+                        if not face:
+                            continue
                         mid = doc.GetPaintedMaterial(wall.Id, ref)
-                        if mid == DB.ElementId.InvalidElementId: continue
+                        if mid == DB.ElementId.InvalidElementId:
+                            continue
                         mat = doc.GetElement(mid)
-                        _add(mat.Name if mat else "Paint", _rate_from_material(mat), face.Area)
+                        _add(
+                            mat.Name if mat else "Paint",
+                            _rate_from_material(mat),
+                            face.Area
+                        )
                         got_any = True
-            except: pass
-            if got_any: continue
+            except:
+                pass
+
+            if got_any:
+                continue
+
+            # If Parts exist
             try:
                 pids = DB.PartUtils.GetAssociatedParts(doc, wall.Id, True, True)
                 if pids and pids.Count > 0:
                     for pid in pids:
-                        part = doc.GetElement(pid); geom = part.get_Geometry(opt)
-                        if not geom: continue
+                        part = doc.GetElement(pid)
+                        geom = part.get_Geometry(opt)
+                        if not geom:
+                            continue
                         for g in geom:
                             if isinstance(g, DB.Solid) and g.Faces:
                                 _collect_from_faces(part, list(g.Faces))
@@ -353,7 +484,10 @@ def _gather_wall_painting(doc):
                                     if isinstance(gg, DB.Solid) and gg.Faces:
                                         _collect_from_faces(part, list(gg.Faces))
                     continue
-            except: pass
+            except:
+                pass
+
+            # Fallback: raw geometry
             try:
                 geom = wall.get_Geometry(opt)
                 if geom:
@@ -365,10 +499,16 @@ def _gather_wall_painting(doc):
                             for gg in inst:
                                 if isinstance(gg, DB.Solid) and gg.Faces:
                                     _collect_from_faces(wall, list(gg.Faces))
-            except: pass
-        except: pass
+            except:
+                pass
+
+        except:
+            pass
+
     for v in grouped.values():
-        if abs(v["qty"]) < 1e-6: v["qty"] = 0.0
+        if abs(v["qty"]) < 1e-6:
+            v["qty"] = 0.0
+
     return grouped
 
 # ------------------------------------------------------------------------------
@@ -377,15 +517,18 @@ def _gather_wall_painting(doc):
 _num_pat = re.compile(r"[-+]?\d+(?:[.,]\d+)?")
 
 def _parse_value_string_to_m3(s):
-    if not s: return 0.0
+    if not s:
+        return 0.0
     s = s.strip()
     m = _num_pat.search(s)
-    if not m: return 0.0
+    if not m:
+        return 0.0
     val = float(m.group(0).replace(",", "."))
     s_low = s.lower()
     if "ft" in s_low or "ft³" in s_low or "ft^3" in s_low or "cf" in s_low:
         return val * FT3_TO_M3
-    return val  # assume metric if unit not obvious
+    # assume already metric m³
+    return val
 
 def _param_to_m3(p):
     if not p or not p.HasValue:
@@ -401,96 +544,149 @@ def _param_to_m3(p):
         return 0.0
 
 def _cutfill_from_elem(elem):
-    cut = fill = 0.0
+    cut = 0.0
+    fill = 0.0
     try:
         cp = elem.get_Parameter(DB.BuiltInParameter.SITE_CUT_VOLUME)
         fp = elem.get_Parameter(DB.BuiltInParameter.SITE_FILL_VOLUME)
-        cut += _param_to_m3(cp); fill += _param_to_m3(fp)
-    except: pass
+        cut += _param_to_m3(cp)
+        fill += _param_to_m3(fp)
+    except:
+        pass
+
     if cut <= 1e-9 and fill <= 1e-9:
-        for name in ("Cut","Fill","Net cut/fill","Net Cut/Fill","Net Cut/Fill Volume","Net cut/fill volume"):
+        # Try common alt param names
+        for name in (
+            "Cut",
+            "Fill",
+            "Net cut/fill",
+            "Net Cut/Fill",
+            "Net Cut/Fill Volume",
+            "Net cut/fill volume",
+        ):
             try:
                 p = elem.LookupParameter(name)
                 if p and p.HasValue:
                     v = _param_to_m3(p)
-                    if "cut" in name.lower():  cut  += v
-                    if "fill" in name.lower() and "net" not in name.lower(): fill += v
-            except: pass
+                    nm_low = name.lower()
+                    if "cut" in nm_low:
+                        cut += v
+                    if "fill" in nm_low and "net" not in nm_low:
+                        fill += v
+            except:
+                pass
+
+        # Try scanning all params
         try:
             for p in elem.Parameters:
-                try: nm = p.Definition.Name if p.Definition else ""
-                except: nm = ""
+                try:
+                    nm = p.Definition.Name if p.Definition else ""
+                except:
+                    nm = ""
                 nml = (nm or "").lower()
                 if ("cut" in nml or "fill" in nml) and "offset" not in nml:
                     v = _param_to_m3(p)
-                    if "cut" in nml and v:  cut  += v
-                    if "fill" in nml and "net" not in nml and v: fill += v
-        except: pass
-    return max(cut,0.0), max(fill,0.0)
+                    if "cut" in nml and v:
+                        cut += v
+                    if "fill" in nml and "net" not in nml and v:
+                        fill += v
+        except:
+            pass
+
+    return max(cut, 0.0), max(fill, 0.0)
 
 def _read_cut_fill_from_schedule_cells(doc):
     """Read Topography schedule cell text directly and sum Cut/Fill columns."""
-    cut_total = 0.0; fill_total = 0.0
+    cut_total = 0.0
+    fill_total = 0.0
+
     # Try to limit to topography schedules when possible
     try:
-        topo_cat_id = DB.Category.GetCategory(doc, DB.BuiltInCategory.OST_Topography).Id
+        topo_cat_id = DB.Category.GetCategory(
+            doc, DB.BuiltInCategory.OST_Topography
+        ).Id
     except:
         topo_cat_id = None
 
-    scheds = DB.FilteredElementCollector(doc).OfClass(DB.ViewSchedule).ToElements()
+    scheds = (
+        DB.FilteredElementCollector(doc)
+        .OfClass(DB.ViewSchedule)
+        .ToElements()
+    )
+
     for vs in scheds:
         try:
-            # If schedule category is available and not Topography, skip
-            if topo_cat_id and vs.Definition and vs.Definition.CategoryId and vs.Definition.CategoryId.IntegerValue != topo_cat_id.IntegerValue:
+            # Filter non-topography schedules if we can detect
+            if (
+                topo_cat_id
+                and vs.Definition
+                and vs.Definition.CategoryId
+                and vs.Definition.CategoryId.IntegerValue
+                != topo_cat_id.IntegerValue
+            ):
                 continue
 
             table = vs.GetTableData()
             header = table.GetSectionData(DB.SectionType.Header)
-            body   = table.GetSectionData(DB.SectionType.Body)
+            body = table.GetSectionData(DB.SectionType.Body)
             if body is None:
                 continue
 
-            # Build column-name map from header (fall back to first body row if header empty)
             col_count = body.NumberOfColumns
             header_names = []
+
+            # Capture header row captions if available
             if header and header.NumberOfRows > 0:
-                # Use the bottom-most header row (usually contains the field captions)
                 hdr_row = header.NumberOfRows - 1
                 for c in range(col_count):
-                    header_names.append((header.GetCellText(hdr_row, c) or "").strip().lower())
+                    header_names.append(
+                        (header.GetCellText(hdr_row, c) or "")
+                        .strip()
+                        .lower()
+                    )
             else:
-                # No header rows? Peek at body row 0
+                # fallback
                 if body.NumberOfRows == 0:
                     continue
                 for c in range(col_count):
                     header_names.append("")
 
-            # Identify cut/fill columns
-            cut_cols  = [i for i,h in enumerate(header_names) if ("cut" in h and "net" not in h)]
-            fill_cols = [i for i,h in enumerate(header_names) if ("fill" in h and "net" not in h)]
-            # If header didn’t help, look up ScheduleDefinition field titles
+            cut_cols = [
+                i for i, h in enumerate(header_names)
+                if ("cut" in h and "net" not in h)
+            ]
+            fill_cols = [
+                i for i, h in enumerate(header_names)
+                if ("fill" in h and "net" not in h)
+            ]
+
+            # If headers didn't work, try ScheduleDefinition fields
             if not cut_cols and not fill_cols and vs.Definition:
                 try:
-                    fields = [vs.Definition.GetField(i) for i in range(vs.Definition.GetFieldCount())]
-                    captions = [f.GetName() for f in fields]
-                    # map fields to columns in current layout order
-                    field_order = [vs.Definition.GetField(i).GetName().lower() for i in range(vs.Definition.GetFieldCount())]
-                    for i, cap in enumerate(field_order):
-                        if "cut" in cap and "net" not in cap:  cut_cols.append(i)
-                        if "fill" in cap and "net" not in cap: fill_cols.append(i)
-                except: pass
+                    field_names = [
+                        vs.Definition.GetField(i).GetName().lower()
+                        for i in range(vs.Definition.GetFieldCount())
+                    ]
+                    for i, cap in enumerate(field_names):
+                        if "cut" in cap and "net" not in cap:
+                            cut_cols.append(i)
+                        if "fill" in cap and "net" not in cap:
+                            fill_cols.append(i)
+                except:
+                    pass
 
             if not cut_cols and not fill_cols:
                 continue
 
-            # Sum body cells
+            # Sum body rows
             for r in range(body.NumberOfRows):
-                # Skip total/blank rows
+                # Skip total rows
                 row_is_total = False
                 for c in range(col_count):
                     txt = (body.GetCellText(r, c) or "").strip().lower()
                     if "total" in txt:
-                        row_is_total = True; break
+                        row_is_total = True
+                        break
                 if row_is_total:
                     continue
 
@@ -503,6 +699,7 @@ def _read_cut_fill_from_schedule_cells(doc):
 
         except:
             continue
+
     return cut_total, fill_total
 
 # ------------------------------------------------------------------------------
@@ -512,89 +709,134 @@ skipped = 0
 
 for cat_name in CATEGORY_ORDER:
     bill_name = _bill_for(cat_name)
-    ctx = sheets[bill_name]; ws = ctx["ws"]
-    row = ctx["row"]; cat_counter = ctx["cat_counter"]; cat_subtotals = ctx["cat_subtotals"]
+    ctx = sheets[bill_name]
+    ws = ctx["ws"]
+    row = ctx["row"]
+    cat_counter = ctx["cat_counter"]
+    cat_subtotals = ctx["cat_subtotals"]
     bic = CATEGORY_MAP.get(cat_name)
-    if not bic: continue
+    if not bic:
+        continue
 
     # ---------------- VIRTUAL: Painting ----------------
     if bic is VIRTUAL_PAINT:
         grouped = _gather_wall_painting(revit.doc)
+
         if grouped:
-            ws.write(row,0,str(cat_counter),fmt_section)
-            ws.write(row,1,cat_name.upper(),fmt_section); row += 1; cat_counter += 1
+            ws.write(row, 0, str(cat_counter), fmt_section)
+            ws.write(row, 1, cat_name.upper(), fmt_section)
+            row += 1
+            cat_counter += 1
             ctx["order"].append(cat_name)
+
             if cat_name in CATEGORY_DESCRIPTIONS:
-                ws.write(row,1,CATEGORY_DESCRIPTIONS[cat_name],fmt_description); row += 1
-            first_item_row = row; item_idx = 0
+                ws.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
+                row += 1
+
+            first_item_row = row
+            item_idx = 0
             for name, data in grouped.items():
-                ws.write(row,0,_item_label(item_idx),fmt_normal)
-                ws.write(row,1,name,fmt_normal)
-                ws.write(row,2,data["unit"],fmt_normal)
-                ws.write(row,3,round(float(data["qty"]),2),fmt_normal)
-                ws.write(row,4,round(float(data["rate"]),2),fmt_money)
-                ws.write_formula(row,5,"={}*{}".format(xl_rowcol_to_cell(row,3),xl_rowcol_to_cell(row,4)),fmt_money)
-                row += 1; item_idx += 1
+                ws.write(row, 0, _item_label(item_idx), fmt_normal)
+                ws.write(row, 1, name, fmt_normal)
+                ws.write(row, 2, data["unit"], fmt_normal)
+                ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
+                ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
+                ws.write_formula(
+                    row,
+                    5,
+                    "={}*{}".format(
+                        xl_rowcol_to_cell(row, 3),
+                        xl_rowcol_to_cell(row, 4)
+                    ),
+                    fmt_money
+                )
+                row += 1
+                item_idx += 1
+
             last_item_row = row - 1
-            ws.write(row,1,cat_name.upper()+" TO COLLECTION",fmt_section)
+            ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
             if last_item_row >= first_item_row:
-                ws.write_formula(row,5,"=SUM(F{}:F{})".format(first_item_row+1,last_item_row+1),fmt_money)
+                ws.write_formula(
+                    row,
+                    5,
+                    "=SUM(F{}:F{})".format(
+                        first_item_row + 1,
+                        last_item_row + 1
+                    ),
+                    fmt_money
+                )
             else:
-                ws.write(row,5,0,fmt_money)
-            cat_subtotals[cat_name.upper()] = xl_rowcol_to_cell(row,5)
+                ws.write(row, 5, 0, fmt_money)
+
+            cat_subtotals[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
             row += 2
-        ctx["row"] = row; ctx["cat_counter"] = cat_counter
+
+        ctx["row"] = row
+        ctx["cat_counter"] = cat_counter
         continue
 
     # ---------------- REAL: Cut and Fill ----------------
     if cat_name == "Cut and Fill":
-        total_cut_m3  = 0.0
+        total_cut_m3 = 0.0
         total_fill_m3 = 0.0
 
-        # 0) Read the numbers exactly as shown in the Topography Schedule
+        # 0) Read schedule first
         sc_cut, sc_fill = _read_cut_fill_from_schedule_cells(revit.doc)
-        total_cut_m3  += sc_cut
+        total_cut_m3 += sc_cut
         total_fill_m3 += sc_fill
 
-        # 1) If schedule didn’t give anything, try Graded Regions (by CLASS)
+        # 1) Graded Regions (class)
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
             graded_elems = []
             try:
                 import Autodesk
                 Arch = Autodesk.Revit.DB.Architecture
                 if hasattr(Arch, "GradedRegion"):
-                    graded_elems = list(DB.FilteredElementCollector(revit.doc)
-                                        .OfClass(Arch.GradedRegion).ToElements())
+                    graded_elems = list(
+                        DB.FilteredElementCollector(revit.doc)
+                        .OfClass(Arch.GradedRegion)
+                        .ToElements()
+                    )
             except Exception:
                 graded_elems = []
+
             for g in graded_elems:
-                c,f = _cutfill_from_elem(g)
-                total_cut_m3 += c; total_fill_m3 += f
+                c, f = _cutfill_from_elem(g)
+                total_cut_m3 += c
+                total_fill_m3 += f
 
-        # 2) Then Topography elements
+        # 2) Topography elems
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
-            topo_elems = list(DB.FilteredElementCollector(revit.doc)
-                              .OfCategory(DB.BuiltInCategory.OST_Topography)
-                              .WhereElementIsNotElementType().ToElements())
+            topo_elems = list(
+                DB.FilteredElementCollector(revit.doc)
+                .OfCategory(DB.BuiltInCategory.OST_Topography)
+                .WhereElementIsNotElementType()
+                .ToElements()
+            )
             for t in topo_elems:
-                c,f = _cutfill_from_elem(t)
-                total_cut_m3 += c; total_fill_m3 += f
+                c, f = _cutfill_from_elem(t)
+                total_cut_m3 += c
+                total_fill_m3 += f
 
-        # 3) Last-resort global scan for SITE_* params
+        # 3) Global scan for SITE_* params
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
             for e in DB.FilteredElementCollector(revit.doc).WhereElementIsNotElementType():
                 try:
-                    c,f = _cutfill_from_elem(e)
+                    c, f = _cutfill_from_elem(e)
                     if c > 0 or f > 0:
-                        total_cut_m3 += c; total_fill_m3 += f
+                        total_cut_m3 += c
+                        total_fill_m3 += f
                 except:
                     pass
 
-        # 4) If still nothing, estimate from Pad volumes
+        # 4) Fallback Building Pads
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
-            pad_elems = list(DB.FilteredElementCollector(revit.doc)
-                             .OfCategory(DB.BuiltInCategory.OST_BuildingPad)
-                             .WhereElementIsNotElementType().ToElements())
+            pad_elems = list(
+                DB.FilteredElementCollector(revit.doc)
+                .OfCategory(DB.BuiltInCategory.OST_BuildingPad)
+                .WhereElementIsNotElementType()
+                .ToElements()
+            )
             pad_excav_m3 = 0.0
             for p in pad_elems:
                 try:
@@ -606,239 +848,500 @@ for cat_name in CATEGORY_ORDER:
 
         grouped = {}
         if total_cut_m3 > 1e-9:
-            grouped["Cut Volume"] = {"qty": round(total_cut_m3, 2), "rate": 0.0, "unit": "m³", "comment": ""}
+            grouped["Cut Volume"] = {
+                "qty": round(total_cut_m3, 2),
+                "rate": 0.0,
+                "unit": "m³",
+                "comment": ""
+            }
         if total_fill_m3 > 1e-9:
-            grouped["Fill Volume"] = {"qty": round(total_fill_m3, 2), "rate": 0.0, "unit": "m³", "comment": ""}
+            grouped["Fill Volume"] = {
+                "qty": round(total_fill_m3, 2),
+                "rate": 0.0,
+                "unit": "m³",
+                "comment": ""
+            }
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
             if 'pad_excav_m3' in locals() and pad_excav_m3 > 1e-9:
                 grouped["Pad Excavation (est.)"] = {
-                    "qty": round(pad_excav_m3, 2), "rate": 0.0, "unit": "m³",
+                    "qty": round(pad_excav_m3, 2),
+                    "rate": 0.0,
+                    "unit": "m³",
                     "comment": "Estimated from Building Pad volumes (no graded region / schedule values)."
                 }
 
         if grouped:
-            ws.write(row,0,str(cat_counter),fmt_section)
-            ws.write(row,1,cat_name.upper(),fmt_section); row += 1; cat_counter += 1
+            ws.write(row, 0, str(cat_counter), fmt_section)
+            ws.write(row, 1, cat_name.upper(), fmt_section)
+            row += 1
+            cat_counter += 1
             ctx["order"].append(cat_name)
+
             if cat_name in CATEGORY_DESCRIPTIONS:
-                ws.write(row,1,CATEGORY_DESCRIPTIONS[cat_name],fmt_description); row += 1
-            first_item_row = row; item_idx = 0
+                ws.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
+                row += 1
+
+            first_item_row = row
+            item_idx = 0
             for name, data in grouped.items():
-                ws.write(row,0,_item_label(item_idx),fmt_normal)
-                ws.write(row,1,name,fmt_normal)
-                ws.write(row,2,data["unit"],fmt_normal)
-                ws.write(row,3,data["qty"],fmt_normal)
-                ws.write(row,4,round(float(data["rate"]),2),fmt_money)
-                ws.write_formula(row,5,"={}*{}".format(xl_rowcol_to_cell(row,3),xl_rowcol_to_cell(row,4)),fmt_money)
-                row += 1; item_idx += 1
+                ws.write(row, 0, _item_label(item_idx), fmt_normal)
+                ws.write(row, 1, name, fmt_normal)
+                ws.write(row, 2, data["unit"], fmt_normal)
+                ws.write(row, 3, data["qty"], fmt_normal)
+                ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
+                ws.write_formula(
+                    row,
+                    5,
+                    "={}*{}".format(
+                        xl_rowcol_to_cell(row, 3),
+                        xl_rowcol_to_cell(row, 4)
+                    ),
+                    fmt_money
+                )
+                row += 1
+                item_idx += 1
+
             last_item_row = row - 1
-            ws.write(row,1,cat_name.upper()+" TO COLLECTION",fmt_section)
-            ws.write_formula(row,5,"=SUM(F{}:F{})".format(first_item_row+1,last_item_row+1),fmt_money)
-            ctx["cat_subtotals"][cat_name.upper()] = xl_rowcol_to_cell(row,5)
+            ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
+            ws.write_formula(
+                row,
+                5,
+                "=SUM(F{}:F{})".format(first_item_row + 1, last_item_row + 1),
+                fmt_money
+            )
+            ctx["cat_subtotals"][cat_name.upper()] = xl_rowcol_to_cell(row, 5)
             row += 2
 
-        ctx["row"] = row; ctx["cat_counter"] = cat_counter
+        ctx["row"] = row
+        ctx["cat_counter"] = cat_counter
         continue
 
-    # ---------------- Default collectors (unchanged) ----------------
+    # ---------------- Default collectors ----------------
     if isinstance(bic, list):
         elements = []
         for sub in bic:
-            elements += (DB.FilteredElementCollector(revit.doc)
-                         .OfCategory(sub).WhereElementIsNotElementType().ToElements())
+            elements += (
+                DB.FilteredElementCollector(revit.doc)
+                .OfCategory(sub)
+                .WhereElementIsNotElementType()
+                .ToElements()
+            )
     else:
-        elements = (DB.FilteredElementCollector(revit.doc)
-                    .OfCategory(bic).WhereElementIsNotElementType().ToElements())
+        elements = (
+            DB.FilteredElementCollector(revit.doc)
+            .OfCategory(bic)
+            .WhereElementIsNotElementType()
+            .ToElements()
+        )
 
     grouped = {}
     for el in elements:
         try:
             el_type = revit.doc.GetElement(el.GetTypeId()) if el.GetTypeId() else None
+
             name = None
             if el_type:
                 p_name = el_type.get_Parameter(DB.BuiltInParameter.SYMBOL_NAME_PARAM)
-                if p_name and p_name.HasValue: name = p_name.AsString()
+                if p_name and p_name.HasValue:
+                    name = p_name.AsString()
             if not name:
                 p_ft = el.get_Parameter(DB.BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM)
-                if p_ft and p_ft.HasValue: name = p_ft.AsValueString()
+                if p_ft and p_ft.HasValue:
+                    name = p_ft.AsValueString()
             if not name:
-                name = getattr(el,"Name",None) or (el.Category.Name if el.Category else "Item")
+                name = getattr(el, "Name", None) or (el.Category.Name if el.Category else "Item")
 
             def _get_cost(o):
-                if not o: return 0.0
+                if not o:
+                    return 0.0
                 try:
                     cp = o.LookupParameter(PARAM_COST)
-                    if cp and cp.HasValue: return float(cp.AsDouble())
-                except: pass
+                    if cp and cp.HasValue:
+                        return float(cp.AsDouble())
+                except:
+                    pass
                 return 0.0
+
             rate = _get_cost(el_type) or _get_cost(el)
 
-            qty, unit = 1.0, "No."
+            qty = 1.0
+            unit = "No."
+
             if cat_name == "Block Work in Walls":
                 prm = el.get_Parameter(DB.BuiltInParameter.HOST_AREA_COMPUTED) or el.LookupParameter("Area")
-                qty = prm.AsDouble()*FT2_TO_M2 if (prm and prm.HasValue) else 0.0; unit = "m²"
-            elif cat_name in ("Doors","Windows"):
+                qty = prm.AsDouble() * FT2_TO_M2 if (prm and prm.HasValue) else 0.0
+                unit = "m²"
+
+            elif cat_name in ("Doors", "Windows"):
                 qty = 1
-            elif cat_name in ("Wall and Floor Finishes","Roofs","Ceilings"):
+                unit = "No."
+
+            elif cat_name in ("Wall and Floor Finishes", "Roofs", "Ceilings"):
                 prm = el.LookupParameter("Area")
-                if prm and prm.HasValue: qty = prm.AsDouble()*FT2_TO_M2; unit = "m²"
+                if prm and prm.HasValue:
+                    qty = prm.AsDouble() * FT2_TO_M2
+                    unit = "m²"
+
             elif cat_name == "Structural Foundations":
                 prm = el.LookupParameter("Volume")
-                if prm and prm.HasValue: qty = prm.AsDouble()*FT3_TO_M3; unit = "m³"
+                if prm and prm.HasValue:
+                    qty = prm.AsDouble() * FT3_TO_M3
+                    unit = "m³"
+
             elif cat_name == "Structural Framing":
                 prm = el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
-                if prm and prm.HasValue: qty = prm.AsDouble()*FT_TO_M; unit = "m"
+                if prm and prm.HasValue:
+                    qty = prm.AsDouble() * FT_TO_M
+                    unit = "m"
+
             elif cat_name == "Structural Columns":
-                mat_prm  = el.LookupParameter("Structural Material")
+                mat_prm = el.LookupParameter("Structural Material")
                 mat_elem = revit.doc.GetElement(mat_prm.AsElementId()) if mat_prm else None
-                low = ((mat_elem.Name if mat_elem else "") + " " + (getattr(mat_elem,"MaterialClass","") if mat_elem else "")).lower()
-                vol_prm = el.get_Parameter(DB.BuiltInParameter.HOST_VOLUME_COMPUTED) or el.LookupParameter("Volume")
-                len_prm = (el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH) or
-                           el.get_Parameter(DB.BuiltInParameter.INSTANCE_LENGTH_PARAM) or
-                           el.get_Parameter(DB.BuiltInParameter.COLUMN_HEIGHT) or
-                           el.LookupParameter("Length"))
+                low = (
+                    (mat_elem.Name if mat_elem else "") + " " +
+                    (getattr(mat_elem, "MaterialClass", "") if mat_elem else "")
+                ).lower()
+
+                vol_prm = (
+                    el.get_Parameter(DB.BuiltInParameter.HOST_VOLUME_COMPUTED)
+                    or el.LookupParameter("Volume")
+                )
+                len_prm = (
+                    el.get_Parameter(DB.BuiltInParameter.CURVE_ELEM_LENGTH)
+                    or el.get_Parameter(DB.BuiltInParameter.INSTANCE_LENGTH_PARAM)
+                    or el.get_Parameter(DB.BuiltInParameter.COLUMN_HEIGHT)
+                    or el.LookupParameter("Length")
+                )
+
                 if "concrete" in low:
-                    if vol_prm and vol_prm.HasValue: qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m³"
-                    elif len_prm and len_prm.HasValue: qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
-                elif ("steel" in low) or ("metal" in low):
-                    if len_prm and len_prm.HasValue: qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
-                    elif vol_prm and vol_prm.HasValue: qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m³"
-                else:
-                    if vol_prm and vol_prm.HasValue and vol_prm.AsDouble()>0:
-                        qty = vol_prm.AsDouble()*FT3_TO_M3; unit = "m³"
+                    if vol_prm and vol_prm.HasValue:
+                        qty = vol_prm.AsDouble() * FT3_TO_M3
+                        unit = "m³"
                     elif len_prm and len_prm.HasValue:
-                        qty = len_prm.AsDouble()*FT_TO_M; unit = "m"
+                        qty = len_prm.AsDouble() * FT_TO_M
+                        unit = "m"
+
+                elif ("steel" in low) or ("metal" in low):
+                    if len_prm and len_prm.HasValue:
+                        qty = len_prm.AsDouble() * FT_TO_M
+                        unit = "m"
+                    elif vol_prm and vol_prm.HasValue:
+                        qty = vol_prm.AsDouble() * FT3_TO_M3
+                        unit = "m³"
+
+                else:
+                    if vol_prm and vol_prm.HasValue and vol_prm.AsDouble() > 0:
+                        qty = vol_prm.AsDouble() * FT3_TO_M3
+                        unit = "m³"
+                    elif len_prm and len_prm.HasValue:
+                        qty = len_prm.AsDouble() * FT_TO_M
+                        unit = "m"
 
             comment = ""
             if el_type:
                 tc = el_type.LookupParameter("Type Comments")
-                if tc and tc.HasValue: comment = tc.AsString() or ""
-            if _is_noise(comment) or comment.strip().lower() == (name or "").strip().lower(): comment = ""
+                if tc and tc.HasValue:
+                    comment = tc.AsString() or ""
+
+            if _is_noise(comment) or comment.strip().lower() == (name or "").strip().lower():
+                comment = ""
 
             if name not in grouped:
-                grouped[name] = {"qty": 0.0, "rate": rate, "unit": unit, "comment": comment}
+                grouped[name] = {
+                    "qty": 0.0,
+                    "rate": rate,
+                    "unit": unit,
+                    "comment": comment
+                }
             grouped[name]["qty"] += qty
-            if grouped[name]["rate"] == 0.0 and rate: grouped[name]["rate"] = rate
-            if comment and not grouped[name].get("comment"): grouped[name]["comment"] = comment
+            if grouped[name]["rate"] == 0.0 and rate:
+                grouped[name]["rate"] = rate
+            if comment and not grouped[name].get("comment"):
+                grouped[name]["comment"] = comment
 
         except:
             skipped += 1
 
     if grouped:
-        ws.write(row,0,str(cat_counter),fmt_section)
-        ws.write(row,1,cat_name.upper(),fmt_section)
-        row += 1; cat_counter += 1
+        ws.write(row, 0, str(cat_counter), fmt_section)
+        ws.write(row, 1, cat_name.upper(), fmt_section)
+        row += 1
+        cat_counter += 1
         ctx["order"].append(cat_name)
 
         if cat_name in CATEGORY_DESCRIPTIONS:
-            ws.write(row,1,CATEGORY_DESCRIPTIONS[cat_name],fmt_description); row += 1
+            ws.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
+            row += 1
 
-        first_item_row = row; item_idx = 0
+        first_item_row = row
+        item_idx = 0
         for name, data in grouped.items():
-            ws.write(row,0,_item_label(item_idx),fmt_normal)
-            ws.write(row,1,name,fmt_normal)
-            ws.write(row,2,data["unit"],fmt_normal)
-            ws.write(row,3,round(float(data["qty"]),2),fmt_normal)
-            ws.write(row,4,round(float(data["rate"]),2),fmt_money)
-            ws.write_formula(row,5,"={}*{}".format(xl_rowcol_to_cell(row,3),xl_rowcol_to_cell(row,4)),fmt_money)
-            row += 1; item_idx += 1
+            ws.write(row, 0, _item_label(item_idx), fmt_normal)
+            ws.write(row, 1, name, fmt_normal)
+            ws.write(row, 2, data["unit"], fmt_normal)
+            ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
+            ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
+            ws.write_formula(
+                row,
+                5,
+                "={}*{}".format(
+                    xl_rowcol_to_cell(row, 3),
+                    xl_rowcol_to_cell(row, 4)
+                ),
+                fmt_money
+            )
+            row += 1
+            item_idx += 1
+
             if data.get("comment"):
-                ws.write(row,1,data["comment"],fmt_italic); row += 1
+                ws.write(row, 1, data["comment"], fmt_italic)
+                row += 1
 
         last_item_row = row - 1
-        ws.write(row,1,cat_name.upper()+" TO COLLECTION",fmt_section)
+        ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
         if last_item_row >= first_item_row:
-            ws.write_formula(row,5,"=SUM(F{}:F{})".format(first_item_row+1,last_item_row+1),fmt_money)
+            ws.write_formula(
+                row,
+                5,
+                "=SUM(F{}:F{})".format(first_item_row + 1, last_item_row + 1),
+                fmt_money
+            )
         else:
-            ws.write(row,5,0,fmt_money)
-        ctx["cat_subtotals"][cat_name.upper()] = xl_rowcol_to_cell(row,5)
+            ws.write(row, 5, 0, fmt_money)
+
+        ctx["cat_subtotals"][cat_name.upper()] = xl_rowcol_to_cell(row, 5)
         row += 2
 
-    ctx["row"] = row; ctx["cat_counter"] = cat_counter
+    ctx["row"] = row
+    ctx["cat_counter"] = cat_counter
 
 # ------------------------------------------------------------------------------
 # Finalize bills & GENERAL SUMMARY
 # ------------------------------------------------------------------------------
 ORDERED_BILLS = [BILL1_NAME, BILL2_NAME]
 bill_grand_refs = []
+
 for bill_name in ORDERED_BILLS:
-    ctx = sheets[bill_name]; ws = ctx["ws"]
-    grand_addr, _ = finalize_bill_sheet(ws, ctx["row"], ctx["order"], ctx["cat_subtotals"])
+    ctx = sheets[bill_name]
+    ws = ctx["ws"]
+    grand_addr, _ = finalize_bill_sheet(
+        ws,
+        ctx["row"],
+        ctx["order"],
+        ctx["cat_subtotals"]
+    )
     bill_grand_refs.append(_sheet_ref(bill_name, grand_addr))
 
-summary_ws = wb.add_worksheet(SUMMARY_NAME); _set_portrait(summary_ws)
+summary_ws = wb.add_worksheet(SUMMARY_NAME)
+_set_portrait(summary_ws)
 summary_ws.set_tab_color(TAB_COLORS["SUMMARY"])
-summary_ws.set_column(0,0,6); summary_ws.set_column(1,1,60); summary_ws.set_column(2,2,4); summary_ws.set_column(3,3,18)
-summary_ws.merge_range(0,0,0,3,"GENERAL SUMMARY",fmt_center)
-summary_ws.write(1,0,"ITEM",fmt_header); summary_ws.write(1,1,"DESCRIPTION",fmt_header)
-summary_ws.write(1,2,"",fmt_header); summary_ws.write(1,3,"AMOUNT (ZMW)",fmt_header)
+
+summary_ws.set_column(0, 0, 6)
+summary_ws.set_column(1, 1, 60)
+summary_ws.set_column(2, 2, 4)
+summary_ws.set_column(3, 3, 18)
+
+summary_ws.merge_range(0, 0, 0, 3, "GENERAL SUMMARY", fmt_center)
+
+summary_ws.write(1, 0, "ITEM", fmt_header)
+summary_ws.write(1, 1, "DESCRIPTION", fmt_header)
+summary_ws.write(1, 2, "", fmt_header)
+summary_ws.write(1, 3, "AMOUNT (ZMW)", fmt_header)
 
 row = 2
-summary_ws.merge_range(row,1,row,3,_get_project_title().upper(),fmt_bold); row += 2
-CURRENCY_SYM = "K"
-for idx,(bill_name,ref) in enumerate(zip(ORDERED_BILLS,bill_grand_refs),start=1):
-    label_tail = bill_name.split(" - ",1)[-1].upper() if " - " in bill_name else bill_name.upper()
-    summary_ws.write(row,1,"BILL No. {}: {}".format(idx,label_tail),fmt_text)
-    summary_ws.write(row,2,CURRENCY_SYM,fmt_text)
-    summary_ws.write_formula(row,3,"="+ref,fmt_money_right); row += 1
 
-sub1_row = row
-summary_ws.write_blank(row,0,None,fmt_text)
-summary_ws.write(row,1,"Sub total 1",fmt_bold); summary_ws.write(row,2,CURRENCY_SYM,fmt_bold)
-if bill_grand_refs:
-    summary_ws.write_formula(row,3,"=SUM({})".format(",".join(bill_grand_refs)),fmt_money_right)
-else:
-    summary_ws.write(row,3,0,fmt_money_right)
+summary_ws.merge_range(
+    row,
+    1,
+    row,
+    3,
+    _get_project_title().upper(),
+    fmt_bold
+)
 row += 2
 
-disc_text = ("Should the Contractor desire to make any discount on the above total, "
-             "it is to be made here and the amount will be treated as a percentage of "
-             "the total as above. The rates inserted by the contractor against the "
-             "items throughout this tender will be adjusted accordingly by this "
-             "percentage during project execution")
-disc_top = row; disc_bottom = row + 5
-summary_ws.merge_range(disc_top,1,disc_bottom,1,disc_text,fmt_wrap)
-summary_ws.write(disc_top,2,"%",fmt_center); summary_ws.write(disc_top+1,2,0,fmt_percent)
-discount_cell = xl_rowcol_to_cell(disc_top+1,2)
+CURRENCY_SYM = "K"
+
+for idx, (bill_name, ref) in enumerate(
+    zip(ORDERED_BILLS, bill_grand_refs),
+    start=1
+):
+    if " - " in bill_name:
+        label_tail = bill_name.split(" - ", 1)[-1].upper()
+    else:
+        label_tail = bill_name.upper()
+
+    summary_ws.write(
+        row,
+        1,
+        "BILL No. {}: {}".format(idx, label_tail),
+        fmt_text
+    )
+    summary_ws.write(row, 2, CURRENCY_SYM, fmt_text)
+    summary_ws.write_formula(row, 3, "=" + ref, fmt_money_right)
+    row += 1
+
+sub1_row = row
+summary_ws.write_blank(row, 0, None, fmt_text)
+summary_ws.write(row, 1, "Sub total 1", fmt_bold)
+summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
+
+if bill_grand_refs:
+    summary_ws.write_formula(
+        row,
+        3,
+        "=SUM({})".format(",".join(bill_grand_refs)),
+        fmt_money_right
+    )
+else:
+    summary_ws.write(row, 3, 0, fmt_money_right)
+
+row += 2
+
+disc_text = (
+    "Should the Contractor desire to make any discount on the above total, "
+    "it is to be made here and the amount will be treated as a percentage of "
+    "the total as above. The rates inserted by the contractor against the "
+    "items throughout this tender will be adjusted accordingly by this "
+    "percentage during project execution"
+)
+
+disc_top = row
+disc_bottom = row + 5
+
+summary_ws.merge_range(
+    disc_top,
+    1,
+    disc_bottom,
+    1,
+    disc_text,
+    fmt_wrap
+)
+
+summary_ws.write(disc_top, 2, "%", fmt_center)
+summary_ws.write(disc_top + 1, 2, 0, fmt_percent)
+
+discount_cell = xl_rowcol_to_cell(disc_top + 1, 2)
 
 row = disc_bottom + 1
+
 sub2_row = row
-summary_ws.write_blank(row,0,None,fmt_text)
-summary_ws.write(row,1,"Sub total 2",fmt_bold); summary_ws.write(row,2,CURRENCY_SYM,fmt_bold)
-summary_ws.write_formula(row,3,"={}*(1-{})".format(xl_rowcol_to_cell(sub1_row,3),discount_cell),fmt_money_right); row += 1
+summary_ws.write_blank(row, 0, None, fmt_text)
+summary_ws.write(row, 1, "Sub total 2", fmt_bold)
+summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
+summary_ws.write_formula(
+    row,
+    3,
+    "={}*(1-{})".format(
+        xl_rowcol_to_cell(sub1_row, 3),
+        discount_cell
+    ),
+    fmt_money_right
+)
+row += 1
 
 CONTINGENCY_RATE = 0.05
-summary_ws.write(row,1,"Allow for contingencies @ {}%".format(int(CONTINGENCY_RATE*100)),fmt_text)
-summary_ws.write_blank(row,2,None,fmt_text)
-summary_ws.write_formula(row,3,"={}*{}".format(xl_rowcol_to_cell(sub2_row,3),CONTINGENCY_RATE),fmt_money_right)
-contingency_row = row; row += 1
+
+summary_ws.write(
+    row,
+    1,
+    "Allow for contingencies @ {}%".format(int(CONTINGENCY_RATE * 100)),
+    fmt_text
+)
+summary_ws.write_blank(row, 2, None, fmt_text)
+summary_ws.write_formula(
+    row,
+    3,
+    "={}*{}".format(
+        xl_rowcol_to_cell(sub2_row, 3),
+        CONTINGENCY_RATE
+    ),
+    fmt_money_right
+)
+
+contingency_row = row
+row += 1
 
 sub3_row = row
-summary_ws.write_blank(row,0,None,fmt_text)
-summary_ws.write(row,1,"Sub total 3",fmt_bold); summary_ws.write(row,2,CURRENCY_SYM,fmt_bold)
-summary_ws.write_formula(row,3,"={}+{}".format(xl_rowcol_to_cell(sub2_row,3),xl_rowcol_to_cell(contingency_row,3)),fmt_money_right); row += 1
+summary_ws.write_blank(row, 0, None, fmt_text)
+summary_ws.write(row, 1, "Sub total 3", fmt_bold)
+summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
+summary_ws.write_formula(
+    row,
+    3,
+    "={}+{}".format(
+        xl_rowcol_to_cell(sub2_row, 3),
+        xl_rowcol_to_cell(contingency_row, 3)
+    ),
+    fmt_money_right
+)
+row += 1
 
-summary_ws.write(row,1,"Add VAT OR TOT, whichever is applicable",fmt_text)
-summary_ws.write(row,2,"",fmt_text); summary_ws.write(row,3,"Inclusive",fmt_text); row += 1
+summary_ws.write(
+    row,
+    1,
+    "Add VAT OR TOT, whichever is applicable",
+    fmt_text
+)
+summary_ws.write(row, 2, "", fmt_text)
+summary_ws.write(row, 3, "Inclusive", fmt_text)
+row += 1
 
-summary_ws.write(row,1,"GRAND TOTAL CARRIED TO FORM OF TENDER",fmt_bold)
-summary_ws.write(row,2,CURRENCY_SYM,fmt_bold)
-summary_ws.write_formula(row,3,"={}".format(xl_rowcol_to_cell(sub3_row,3)),fmt_money_right); row += 1
+summary_ws.write(
+    row,
+    1,
+    "GRAND TOTAL CARRIED TO FORM OF TENDER",
+    fmt_bold
+)
+summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
+summary_ws.write_formula(
+    row,
+    3,
+    "={}".format(xl_rowcol_to_cell(sub3_row, 3)),
+    fmt_money_right
+)
+row += 1
 
 FIRST_PAGE_LAST_ROW = 47
-SIG_BLOCK_HEIGHT    = 4
-sig_top_row_1based  = FIRST_PAGE_LAST_ROW - SIG_BLOCK_HEIGHT + 1
-sig_top_row_0based  = sig_top_row_1based - 1
-while row < sig_top_row_0based:
-    summary_ws.write_blank(row,0,None,fmt_noborder)
-    summary_ws.write_blank(row,1,None,fmt_noborder)
-    summary_ws.write_blank(row,2,None,fmt_noborder)
-    summary_ws.write_blank(row,3,None,fmt_noborder); row += 1
+SIG_BLOCK_HEIGHT = 4
+sig_top_row_1based = FIRST_PAGE_LAST_ROW - SIG_BLOCK_HEIGHT + 1
+sig_top_row_0based = sig_top_row_1based - 1
 
-summary_ws.write(row,1,"Signature of Contractor .................................................................",fmt_text); row += 1
-summary_ws.write(row,1,"Name of Firm: ..............................................................................",fmt_text); row += 1
-summary_ws.write(row,1,"Address: ...................................................................................",fmt_text); row += 1
-summary_ws.write(row,1,"Date: ......................................................................................",fmt_text); row += 1
+while row < sig_top_row_0based:
+    summary_ws.write_blank(row, 0, None, fmt_noborder)
+    summary_ws.write_blank(row, 1, None, fmt_noborder)
+    summary_ws.write_blank(row, 2, None, fmt_noborder)
+    summary_ws.write_blank(row, 3, None, fmt_noborder)
+    row += 1
+
+summary_ws.write(
+    row,
+    1,
+    "Signature of Contractor .................................................................",
+    fmt_text
+)
+row += 1
+summary_ws.write(
+    row,
+    1,
+    "Name of Firm: ..............................................................................",
+    fmt_text
+)
+row += 1
+summary_ws.write(
+    row,
+    1,
+    "Address: ...................................................................................",
+    fmt_text
+)
+row += 1
+summary_ws.write(
+    row,
+    1,
+    "Date: ......................................................................................",
+    fmt_text
+)
+row += 1
 
 summary_ws.set_h_pagebreaks([FIRST_PAGE_LAST_ROW])
 
@@ -846,7 +1349,10 @@ summary_ws.set_h_pagebreaks([FIRST_PAGE_LAST_ROW])
 # Close and notify
 # ------------------------------------------------------------------------------
 wb.close()
+
 MessageBox.Show(
-    "BOQ export (multi-sheet) complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(xlsx_path, skipped),
+    "BOQ export (multi-sheet) complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(
+        xlsx_path, skipped
+    ),
     "✅ XLSX Export"
 )
