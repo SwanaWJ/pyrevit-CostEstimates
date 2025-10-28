@@ -26,22 +26,23 @@ TAB_COLORS = {
     "COVER":   "#A6A6A6",
     "BILL1":   "#4472C4",
     "BILL2":   "#C00000",
-    "BILL3":   "#FFD966",   # EXTERNAL WORKS (yellow tab)
+    "BILL3":   "#FFD966",   # EXTERNAL WORKS tab = yellow
     "SUMMARY": "#70AD47",
 }
 
-# NOTE:
-# We've split the internal category list (model-measured stuff) from external works.
-# CATEGORY_ORDER drives BILL 1 & BILL 2 only.
+# Category order for BILL 1 + BILL 2
 CATEGORY_ORDER = [
     "Cut and Fill",
     "Structural Foundations",
+    "Internal Floors",
+    "Internal Walls",
+    "Internal Stairs",
     "Block Work in Walls",
     "Structural Columns",
     "Structural Framing",
     "Structural Rebar",
-    "Ceilings",
     "Roofs",
+    "Ceilings",
     "Windows",
     "Doors",
     "Electrical",
@@ -49,29 +50,43 @@ CATEGORY_ORDER = [
     "Painting",
     "Wall and Floor Finishes",
     "Furniture",
-
 ]
 
-# New: EXTERNAL WORKS categories (these will live on their own sheet)
+# Category order for BILL 3 (external works)
 EXTERNAL_WORKS_ORDER = [
+    "External Floors",
+    "External Walls",
+    "External Stairs",
     "Parking",
+    "Planting",
+    "Site Works",
     "Paving",
     "Drainage",
     "Fencing",
 ]
 
-VIRTUAL_PAINT = object()
-VIRTUAL_EXTERNAL = object()  # signal group that isn't coming from Revit categories
+VIRTUAL_PAINT    = object()
+VIRTUAL_EXTERNAL = object()  # used for manual / split / site categories
 
 CATEGORY_MAP = {
-    # INTERNAL / ARCH / STRUCT / MEP
-    "Cut and Fill":            DB.BuiltInCategory.OST_Topography,  # + GradedRegion logic
+    # CORE / BUILDING / STRUCTURE / MEP
+    "Cut and Fill":            DB.BuiltInCategory.OST_Topography,  # plus graded region logic
     "Structural Foundations":  DB.BuiltInCategory.OST_StructuralFoundation,
+
+    # split by Function (internal/external)
+    "Internal Floors":         VIRTUAL_EXTERNAL,
+    "External Floors":         VIRTUAL_EXTERNAL,
+    "Internal Walls":          VIRTUAL_EXTERNAL,
+    "External Walls":          VIRTUAL_EXTERNAL,
+    "Internal Stairs":         VIRTUAL_EXTERNAL,
+    "External Stairs":         VIRTUAL_EXTERNAL,
+
     "Block Work in Walls":     DB.BuiltInCategory.OST_Walls,
     "Structural Columns":      DB.BuiltInCategory.OST_StructuralColumns,
     "Structural Framing":      DB.BuiltInCategory.OST_StructuralFraming,
     "Structural Rebar":        DB.BuiltInCategory.OST_Rebar,
     "Roofs":                   DB.BuiltInCategory.OST_Roofs,
+    "Ceilings":                DB.BuiltInCategory.OST_Ceilings,
     "Windows":                 DB.BuiltInCategory.OST_Windows,
     "Doors":                   DB.BuiltInCategory.OST_Doors,
 
@@ -95,19 +110,22 @@ CATEGORY_MAP = {
         DB.BuiltInCategory.OST_Furniture,
         DB.BuiltInCategory.OST_FurnitureSystems,
     ],
-    "Ceilings":                DB.BuiltInCategory.OST_Ceilings,
 
-    # EXTERNAL WORKS (virtual placeholders for now)
-    "Parking":   VIRTUAL_EXTERNAL,
-    "Paving":    VIRTUAL_EXTERNAL,
-    "Drainage":  VIRTUAL_EXTERNAL,
-    "Fencing":   VIRTUAL_EXTERNAL,
+    # EXTERNAL WORKS (manual / site)
+    "External Floors": VIRTUAL_EXTERNAL,
+    "External Walls":  VIRTUAL_EXTERNAL,
+    "External Stairs": VIRTUAL_EXTERNAL,
+    "Parking":         VIRTUAL_EXTERNAL,
+    "Planting":        VIRTUAL_EXTERNAL,
+    "Site Works":      VIRTUAL_EXTERNAL,
+    "Paving":          VIRTUAL_EXTERNAL,
+    "Drainage":        VIRTUAL_EXTERNAL,
+    "Fencing":         VIRTUAL_EXTERNAL,
 }
 
-# ensure everything in CATEGORY_ORDER and EXTERNAL_WORKS_ORDER exists in CATEGORY_MAP
-_missing_internal = [c for c in CATEGORY_ORDER if c not in CATEGORY_MAP]
-_missing_external = [c for c in EXTERNAL_WORKS_ORDER if c not in CATEGORY_MAP]
-_missing = _missing_internal + _missing_external
+_missing_int  = [c for c in CATEGORY_ORDER if c not in CATEGORY_MAP]
+_missing_ext  = [c for c in EXTERNAL_WORKS_ORDER if c not in CATEGORY_MAP]
+_missing = _missing_int + _missing_ext
 if _missing:
     from pyrevit import forms
     forms.alert("Missing in CATEGORY_MAP:\n\n- " + "\n- ".join(_missing),
@@ -115,36 +133,55 @@ if _missing:
     raise SystemExit
 
 CATEGORY_DESCRIPTIONS = {
-    # INTERNAL WORKS / STRUCTURE / MEP
     "Cut and Fill": (
         "Bulk earthworks operations including excavation (cut) and embankment (fill), "
-        "measured from Revit Topography / Graded Regions, or estimated from Building Pads "
-        "if no graded region exists."
-    ),
-    "Block Work in Walls": (
-        "Concrete block walls, load-bearing or cavity, plastered both sides and painted to "
-        "BS 8000-3 masonry workmanship standards, including all mortar, bed-joint "
-        "reinforcement, movement provision and finishing to BS 5628-2/-3 quality."
-    ),
-    "Doors": (
-        "Timber or engineered doors with hardwood frames, architraves, ironmongery, seals "
-        "and painting; installed and fitted as per BS 8214."
-    ),
-    "Windows": (
-        "Aluminium sliding or casement windows with glazing, mosquito nets, stays, handles "
-        "and fixings; installed per BS 6262 (glazing) and BS 6375."
+        "measured from Revit Topography / Graded Regions, or estimated from Building "
+        "Pads if no graded region exists."
     ),
     "Structural Foundations": (
         "Mass or reinforced concrete footings, hardcore bedding, DPM and formwork, "
         "conforming to BS 8000 (earthworks) and BS 8110 (concrete)."
     ),
-    "Structural Framing": (
-        "Mild steel beams and trusses, welded or bolted, treated with primer/paint to "
-        "BS 5493 and fabricated per BS 5950."
+
+    "Internal Floors": (
+        "In-situ or suspended internal concrete floor slabs, screeds and finishes within "
+        "the building footprint."
+    ),
+    "External Floors": (
+        "External slabs, aprons, walkways, ramps and hardscape slabs cast in place, "
+        "including preparation, sub-base and finishing, exposed to weather."
+    ),
+
+    "Internal Walls": (
+        "Internal wall construction including blockwork, plaster, paint, finishes, framing "
+        "and associated sundries within the building envelope."
+    ),
+    "External Walls": (
+        "External / retaining walls, upstands, plinth walls and exposed walling to the "
+        "perimeter and site works, including finishes and weatherproofing."
+    ),
+
+    "Internal Stairs": (
+        "Internal stair flights, landings, risers and finishes within the building, "
+        "including structural support and balustrades where applicable."
+    ),
+    "External Stairs": (
+        "External stair flights, ramps or stepped access in exposed locations, including "
+        "concrete, nosings, drainage slots, balustrades and associated works."
+    ),
+
+    "Block Work in Walls": (
+        "Concrete block walls, load-bearing or cavity, plastered both sides and painted to "
+        "BS 8000-3 masonry workmanship standards, including all mortar, bed-joint "
+        "reinforcement, movement provision and finishing to BS 5628-2/-3 quality."
     ),
     "Structural Columns": (
         "Concrete/steel columns with starter bars, ties and shuttering; concrete to spec "
         "per BS 8110-1, steel primed per BS 5493."
+    ),
+    "Structural Framing": (
+        "Mild steel beams and trusses, welded or bolted, treated with primer/paint to "
+        "BS 5493 and fabricated per BS 5950."
     ),
     "Structural Rebar": (
         "High-yield deformed steel bars (BS 4449 B500B), cut, bent, fixed and supported "
@@ -158,9 +195,17 @@ CATEGORY_DESCRIPTIONS = {
         "Particleboard or PVC tongue-and-groove ceilings, fixed or suspended per BS 5306 "
         "and manufacturer instructions."
     ),
+    "Windows": (
+        "Aluminium sliding or casement windows with glazing, mosquito nets, stays, "
+        "handles and fixings; installed per BS 6262 (glazing) and BS 6375."
+    ),
+    "Doors": (
+        "Timber or engineered doors with hardwood frames, architraves, ironmongery, seals "
+        "and painting; installed and fitted as per BS 8214."
+    ),
     "Wall and Floor Finishes": (
-        "Tiling and screed finishes and plaster/paint to walls, following BS 5385 (tiling), "
-        "BS 8203 (screed) and BS 8000 finishing workmanship standards."
+        "Tiling and screed finishes and plaster/paint to walls, following BS 5385 "
+        "(tiling), BS 8203 (screed) and BS 8000 finishing workmanship standards."
     ),
     "Plumbing": (
         "Sanitary appliances (WC pans, cisterns, basins, sinks, urinals) per BS 6465-3, "
@@ -178,21 +223,31 @@ CATEGORY_DESCRIPTIONS = {
 
     # EXTERNAL WORKS descriptions
     "Parking": (
-        "External parking areas including formation preparation, sub-base, basecourse "
-        "and final wearing course (asphalt / concrete block paving), line marking, "
-        "edging and any associated kerbs."
+        "External parking areas including formation, preparation, sub-base, basecourse and "
+        "final wearing course (asphalt / concrete block paving), line marking, edging and "
+        "any associated kerbs."
+    ),
+    "Planting": (
+        "Planting works including topsoil preparation, supply and installation of trees, shrubs, "
+        "hedges, grassing and maintenance during the defects liability period, in accordance "
+        "with landscape drawings and specifications."
+    ),
+    "Site Works": (
+        "Site preparation, grading, levelling, hardcore fill, compaction, temporary works, "
+        "access routes, street furniture and other external site-related works as indicated "
+        "on the site development plans."
     ),
     "Paving": (
-        "Walkways and paved circulation areas using concrete blocks / pavers on sand "
-        "bedding, including compacted sub-base, edge restraints and jointing sand."
+        "Walkways and paved circulation areas using concrete blocks / pavers on sand bedding, "
+        "including compacted sub-base, edge restraints and jointing sand."
     ),
     "Drainage": (
-        "Surface water and site drainage including open drains, culverts, manholes, "
-        "catchpits, gullies and pipework laid to falls, including bedding and surround."
+        "Surface water and site drainage including open drains, culverts, manholes, catchpits, "
+        "gullies and pipework laid to falls, including bedding and surround."
     ),
     "Fencing": (
-        "Site perimeter fencing including posts, rails, mesh / palisade panels, "
-        "gates and associated excavation and concrete setting of posts."
+        "Site perimeter fencing including posts, rails, mesh / palisade panels, gates and "
+        "associated excavation and concrete setting of posts."
     ),
 }
 
@@ -212,7 +267,12 @@ except AttributeError:
 
 font = 'Arial Narrow'
 def col_fmt(bold=False, italic=False, underline=False, wrap=False, num_fmt=None):
-    fmt = {'valign': 'top', 'font_name': font, 'font_size': 12, 'border': 1}
+    fmt = {
+        'valign': 'top',
+        'font_name': font,
+        'font_size': 12,
+        'border': 1
+    }
     if bold: fmt['bold'] = True
     if italic: fmt['italic'] = True
     if underline: fmt['underline'] = True
@@ -227,7 +287,6 @@ fmt_normal      = col_fmt()
 fmt_italic      = col_fmt(italic=True, wrap=True)
 fmt_money       = col_fmt(num_fmt='#,##0.00')
 fmt_title       = wb.add_format({'bold': True, 'font_name': font, 'font_size': 12, 'align':'left'})
-fmt_cover_big   = wb.add_format({'bold': True, 'font_name': font, 'font_size': 12, 'align':'center'})
 fmt_cover_huge  = wb.add_format({'bold': True, 'font_name': font, 'font_size': 16, 'align': 'center'})
 fmt_center      = wb.add_format({'font_name': font, 'font_size': 12, 'align': 'center', 'valign': 'vcenter', 'border': 1})
 fmt_text        = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1})
@@ -236,14 +295,7 @@ fmt_wrap        = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1
 fmt_percent     = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '0.00%'})
 fmt_money_right = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '#,##0.00', 'align': 'right'})
 fmt_noborder    = wb.add_format({'font_name': font, 'font_size': 12})
-
-# centered no-border for cover page text
-fmt_text_center = wb.add_format({
-    'font_name': font,
-    'font_size': 12,
-    'align': 'center',
-    'valign': 'vcenter'
-})
+fmt_text_center = wb.add_format({'font_name': font, 'font_size': 12, 'align': 'center', 'valign': 'vcenter'})
 
 # ------------------------------------------------------------------------------
 # Helpers: Project Title / Address
@@ -322,7 +374,6 @@ def init_bill_sheet(name):
     ws.set_column(1, 1, 45)
     ws.set_column(4, 4, 12)
     ws.set_column(5, 5, 16)
-
     ws.freeze_panes(2, 0)
     return ws
 
@@ -365,7 +416,6 @@ def init_cover_sheet(name):
     return ws
 
 def finalize_bill_sheet(ws, row, sheet_cat_order, cat_subtotals):
-    """Write COLLECTION + GRAND TOTAL block at end of each bill sheet."""
     ws.write(row, 1, "COLLECTION", fmt_section)
     row += 1
     count = 1
@@ -381,7 +431,6 @@ def finalize_bill_sheet(ws, row, sheet_cat_order, cat_subtotals):
 
     ws.write_blank(row, 0, None, fmt_section)
     ws.write(row, 1, "GRAND TOTAL", fmt_section)
-
     if cat_subtotals:
         sum_cells = ",".join(
             cat_subtotals[k.upper()]
@@ -398,13 +447,13 @@ def _sheet_ref(name, cell_addr):
     return "'{}'!{}".format(name.replace("'", "''"), cell_addr)
 
 # ------------------------------------------------------------------------------
-# Workbook structure (NOW WITH EXTERNAL WORKS BILL 3)
+# Workbook structure (with BILL 3 - EXTERNAL WORKS)
 # ------------------------------------------------------------------------------
 _USED_SHEETS = set()
 COVER_NAME   = _safe_sheet_name("COVER", _USED_SHEETS)
 BILL1_NAME   = _safe_sheet_name("BILL 1 - SUB & SUPERSTRUCTURE", _USED_SHEETS)
 BILL2_NAME   = _safe_sheet_name("BILL 2 - MEP", _USED_SHEETS)
-BILL3_NAME   = _safe_sheet_name("EXTERNAL WORKS", _USED_SHEETS)
+BILL3_NAME   = _safe_sheet_name("BILL 3 - EXTERNAL WORKS", _USED_SHEETS)
 SUMMARY_NAME = _safe_sheet_name("GENERAL SUMMARY", _USED_SHEETS)
 
 cover_ws = init_cover_sheet(COVER_NAME)
@@ -436,27 +485,37 @@ sheets = {
 
 sheets[BILL1_NAME]["ws"].set_tab_color(TAB_COLORS["BILL1"])
 sheets[BILL2_NAME]["ws"].set_tab_color(TAB_COLORS["BILL2"])
-sheets[BILL3_NAME]["ws"].set_tab_color(TAB_COLORS["BILL3"])  # yellow tab
+sheets[BILL3_NAME]["ws"].set_tab_color(TAB_COLORS["BILL3"])  # yellow
 
-# Which bill each category belongs to
 BILL_FOR_CATEGORY = {
     "Electrical": BILL2_NAME,
     "Plumbing":   BILL2_NAME,
 
-    # External Works categories go to BILL3_NAME:
-    "Parking":    BILL3_NAME,
-    "Paving":     BILL3_NAME,
-    "Drainage":   BILL3_NAME,
-    "Fencing":    BILL3_NAME,
+    # external works live on BILL 3
+    "External Floors": BILL3_NAME,
+    "External Walls":  BILL3_NAME,
+    "External Stairs": BILL3_NAME,
+    "Parking":         BILL3_NAME,
+    "Planting":        BILL3_NAME,
+    "Site Works":      BILL3_NAME,
+    "Paving":          BILL3_NAME,
+    "Drainage":        BILL3_NAME,
+    "Fencing":         BILL3_NAME,
+
+    # internal split categories -> BILL 1
+    "Internal Floors": BILL1_NAME,
+    "Internal Walls":  BILL1_NAME,
+    "Internal Stairs": BILL1_NAME,
 }
 def _bill_for(cat):
     return BILL_FOR_CATEGORY.get(cat, BILL1_NAME)
 
 # ------------------------------------------------------------------------------
-# Painting helper (unchanged)
+# Painting helper
 # ------------------------------------------------------------------------------
 def _gather_wall_painting(doc):
     grouped = {}
+
     def _add(material_name, rate, area_ft2):
         key = "Paint - {}".format(material_name or "Paint")
         qty_m2 = float(area_ft2) * FT2_TO_M2
@@ -487,9 +546,11 @@ def _gather_wall_painting(doc):
             if mid == DB.ElementId.InvalidElementId:
                 continue
             mat = doc.GetElement(mid)
-            _add(mat.Name if mat else "Paint",
-                 _rate_from_material(mat),
-                 f.Area)
+            _add(
+                mat.Name if mat else "Paint",
+                _rate_from_material(mat),
+                f.Area
+            )
 
     walls = (
         DB.FilteredElementCollector(doc)
@@ -519,9 +580,11 @@ def _gather_wall_painting(doc):
                         if mid == DB.ElementId.InvalidElementId:
                             continue
                         mat = doc.GetElement(mid)
-                        _add(mat.Name if mat else "Paint",
-                             _rate_from_material(mat),
-                             face.Area)
+                        _add(
+                            mat.Name if mat else "Paint",
+                            _rate_from_material(mat),
+                            face.Area
+                        )
                         got_any = True
             except:
                 pass
@@ -531,9 +594,10 @@ def _gather_wall_painting(doc):
             try:
                 pids = DB.PartUtils.GetAssociatedParts(revit.doc, wall.Id, True, True)
                 if pids and pids.Count > 0:
+                    geom_opt = opt
                     for pid in pids:
                         part = revit.doc.GetElement(pid)
-                        geom = part.get_Geometry(opt)
+                        geom = part.get_Geometry(geom_opt)
                         if not geom:
                             continue
                         for g in geom:
@@ -572,11 +636,11 @@ def _gather_wall_painting(doc):
     return grouped
 
 # ------------------------------------------------------------------------------
-# Earthworks helpers (unchanged)
+# Earthworks helpers
 # ------------------------------------------------------------------------------
 _num_pat = re.compile(r"[-+]?\d+(?:[.,]\d+)?")
 
-def _parse_value_string_to_m3(s):
+def _parse_value_string_to_m3_raw(s):
     if not s:
         return 0.0
     s = s.strip()
@@ -587,7 +651,7 @@ def _parse_value_string_to_m3(s):
     s_low = s.lower()
     if "ft" in s_low or "ft³" in s_low or "ft^3" in s_low or "cf" in s_low:
         return val * FT3_TO_M3
-    return val  # assume metric m³
+    return val
 
 def _param_to_m3(p):
     if not p or not p.HasValue:
@@ -598,7 +662,7 @@ def _param_to_m3(p):
     except:
         pass
     try:
-        return _parse_value_string_to_m3(p.AsValueString())
+        return _parse_value_string_to_m3_raw(p.AsValueString())
     except:
         return 0.0
 
@@ -608,19 +672,15 @@ def _cutfill_from_elem(elem):
     try:
         cp = elem.get_Parameter(DB.BuiltInParameter.SITE_CUT_VOLUME)
         fp = elem.get_Parameter(DB.BuiltInParameter.SITE_FILL_VOLUME)
-        cut += _param_to_m3(cp)
+        cut  += _param_to_m3(cp)
         fill += _param_to_m3(fp)
     except:
         pass
 
     if cut <= 1e-9 and fill <= 1e-9:
         for name in (
-            "Cut",
-            "Fill",
-            "Net cut/fill",
-            "Net Cut/Fill",
-            "Net Cut/Fill Volume",
-            "Net cut/fill volume",
+            "Cut","Fill","Net cut/fill","Net Cut/Fill","Net Cut/Fill Volume",
+            "Net cut/fill volume"
         ):
             try:
                 p = elem.LookupParameter(name)
@@ -628,11 +688,12 @@ def _cutfill_from_elem(elem):
                     v = _param_to_m3(p)
                     nm_low = name.lower()
                     if "cut" in nm_low:
-                        cut += v
+                        cut  += v
                     if "fill" in nm_low and "net" not in nm_low:
                         fill += v
             except:
                 pass
+
         try:
             for p in elem.Parameters:
                 try:
@@ -643,7 +704,7 @@ def _cutfill_from_elem(elem):
                 if ("cut" in nml or "fill" in nml) and "offset" not in nml:
                     v = _param_to_m3(p)
                     if "cut" in nml and v:
-                        cut += v
+                        cut  += v
                     if "fill" in nml and "net" not in nml and v:
                         fill += v
         except:
@@ -652,7 +713,6 @@ def _cutfill_from_elem(elem):
     return max(cut, 0.0), max(fill, 0.0)
 
 def _read_cut_fill_from_schedule_cells(doc):
-    """Read Topography schedule cell text directly and sum Cut/Fill columns."""
     cut_total = 0.0
     fill_total = 0.0
     try:
@@ -681,7 +741,7 @@ def _read_cut_fill_from_schedule_cells(doc):
 
             table = vs.GetTableData()
             header = table.GetSectionData(DB.SectionType.Header)
-            body = table.GetSectionData(DB.SectionType.Body)
+            body   = table.GetSectionData(DB.SectionType.Body)
             if body is None:
                 continue
 
@@ -699,7 +759,7 @@ def _read_cut_fill_from_schedule_cells(doc):
             else:
                 if body.NumberOfRows == 0:
                     continue
-                for c in range(col_count):
+                for _ in range(col_count):
                     header_names.append("")
 
             cut_cols = [
@@ -739,10 +799,10 @@ def _read_cut_fill_from_schedule_cells(doc):
                     continue
 
                 for c in cut_cols:
-                    val = _parse_value_string_to_m3(body.GetCellText(r, c))
+                    val = _parse_value_string_to_m3_raw(body.GetCellText(r, c))
                     cut_total += val
                 for c in fill_cols:
-                    val = _parse_value_string_to_m3(body.GetCellText(r, c))
+                    val = _parse_value_string_to_m3_raw(body.GetCellText(r, c))
                     fill_total += val
 
         except:
@@ -751,12 +811,482 @@ def _read_cut_fill_from_schedule_cells(doc):
     return cut_total, fill_total
 
 # ------------------------------------------------------------------------------
+# Helpers for splitting by Function (Interior / Exterior)
+# ------------------------------------------------------------------------------
+def _get_cost(o):
+    if not o:
+        return 0.0
+    try:
+        cp = o.LookupParameter(PARAM_COST)
+        if cp and cp.HasValue:
+            return float(cp.AsDouble())
+    except:
+        pass
+    return 0.0
+
+def _clean_comment(name, raw_comment):
+    comment = raw_comment or ""
+    if comment.strip().lower() == (name or "").strip().lower():
+        comment = ""
+    if len(comment.replace(" ", "")) < 3:
+        comment = ""
+    return comment
+
+def _get_function_string(el_type):
+    if not el_type:
+        return ""
+    try:
+        func_param = el_type.LookupParameter("Function")
+    except:
+        func_param = None
+    if not (func_param and func_param.HasValue):
+        return ""
+
+    try:
+        val = func_param.AsString()
+        if val:
+            return val.strip().lower()
+    except:
+        pass
+
+    try:
+        val = func_param.AsValueString()
+        if val:
+            return val.strip().lower()
+    except:
+        pass
+
+    return ""
+
+def _is_external_function(fv_lower):
+    if "exterior" in fv_lower:
+        return True
+    if "external" in fv_lower:
+        return True
+    if "outside" in fv_lower:
+        return True
+    return False
+
+def _gather_floors_by_function(doc):
+    internal = {}
+    external = {}
+
+    floors = (
+        DB.FilteredElementCollector(doc)
+        .OfCategory(DB.BuiltInCategory.OST_Floors)
+        .WhereElementIsNotElementType()
+        .ToElements()
+    )
+
+    for el in floors:
+        try:
+            el_type = doc.GetElement(el.GetTypeId()) if el.GetTypeId() else None
+
+            name = None
+            if el_type:
+                p_name = el_type.get_Parameter(DB.BuiltInParameter.SYMBOL_NAME_PARAM)
+                if p_name and p_name.HasValue:
+                    name = p_name.AsString()
+            if not name:
+                p_ft = el.get_Parameter(DB.BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM)
+                if p_ft and p_ft.HasValue:
+                    name = p_ft.AsValueString()
+            if not name:
+                name = getattr(el, "Name", None) or "Floor"
+
+            fv = _get_function_string(el_type)
+
+            rate = _get_cost(el_type) or _get_cost(el)
+
+            qty = 0.0
+            unit = "m²"
+            a = el.LookupParameter("Area")
+            if a and a.HasValue:
+                qty = a.AsDouble() * FT2_TO_M2
+
+            cmt = ""
+            if el_type:
+                tc = el_type.LookupParameter("Type Comments")
+                if tc and tc.HasValue:
+                    cmt = tc.AsString() or ""
+            cmt = _clean_comment(name, cmt)
+
+            bucket = "internal"
+            if _is_external_function(fv):
+                bucket = "external"
+
+            grouped = internal if bucket == "internal" else external
+            if name not in grouped:
+                grouped[name] = {
+                    "qty": qty,
+                    "rate": rate,
+                    "unit": unit,
+                    "comment": cmt
+                }
+            else:
+                grouped[name]["qty"] += qty
+                if grouped[name]["rate"] == 0.0 and rate:
+                    grouped[name]["rate"] = rate
+                if cmt and not grouped[name].get("comment"):
+                    grouped[name]["comment"] = cmt
+
+        except:
+            pass
+
+    return internal, external
+
+def _gather_walls_by_function(doc):
+    internal = {}
+    external = {}
+
+    walls = (
+        DB.FilteredElementCollector(doc)
+        .OfCategory(DB.BuiltInCategory.OST_Walls)
+        .WhereElementIsNotElementType()
+        .ToElements()
+    )
+
+    for el in walls:
+        try:
+            el_type = doc.GetElement(el.GetTypeId()) if el.GetTypeId() else None
+
+            name = None
+            if el_type:
+                p_name = el_type.get_Parameter(DB.BuiltInParameter.SYMBOL_NAME_PARAM)
+                if p_name and p_name.HasValue:
+                    name = p_name.AsString()
+            if not name:
+                famtype = el.get_Parameter(DB.BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM)
+                if famtype and famtype.HasValue:
+                    name = famtype.AsValueString()
+            if not name:
+                name = getattr(el, "Name", None) or "Wall"
+
+            fv = _get_function_string(el_type)
+
+            rate = _get_cost(el_type) or _get_cost(el)
+
+            qty = 0.0
+            unit = "m²"
+            area_param = (
+                el.get_Parameter(DB.BuiltInParameter.HOST_AREA_COMPUTED)
+                or el.LookupParameter("Area")
+            )
+            if area_param and area_param.HasValue:
+                qty = area_param.AsDouble() * FT2_TO_M2
+
+            cmt = ""
+            if el_type:
+                tc = el_type.LookupParameter("Type Comments")
+                if tc and tc.HasValue:
+                    cmt = tc.AsString() or ""
+            cmt = _clean_comment(name, cmt)
+
+            bucket = "internal"
+            if _is_external_function(fv):
+                bucket = "external"
+
+            grouped = internal if bucket == "internal" else external
+            if name not in grouped:
+                grouped[name] = {
+                    "qty": qty,
+                    "rate": rate,
+                    "unit": unit,
+                    "comment": cmt
+                }
+            else:
+                grouped[name]["qty"] += qty
+                if grouped[name]["rate"] == 0.0 and rate:
+                    grouped[name]["rate"] = rate
+                if cmt and not grouped[name].get("comment"):
+                    grouped[name]["comment"] = cmt
+
+        except:
+            pass
+
+    return internal, external
+
+def _gather_stairs_by_function(doc):
+    internal = {}
+    external = {}
+
+    stairs = (
+        DB.FilteredElementCollector(doc)
+        .OfCategory(DB.BuiltInCategory.OST_Stairs)
+        .WhereElementIsNotElementType()
+        .ToElements()
+    )
+
+    for el in stairs:
+        try:
+            el_type = doc.GetElement(el.GetTypeId()) if el.GetTypeId() else None
+
+            name = None
+            if el_type:
+                p_name = el_type.get_Parameter(DB.BuiltInParameter.SYMBOL_NAME_PARAM)
+                if p_name and p_name.HasValue:
+                    name = p_name.AsString()
+            if not name:
+                famtype = el.get_Parameter(DB.BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM)
+                if famtype and famtype.HasValue:
+                    name = famtype.AsValueString()
+            if not name:
+                name = getattr(el, "Name", None) or "Stair"
+
+            fv = _get_function_string(el_type)
+
+            rate = _get_cost(el_type) or _get_cost(el)
+
+            qty = 1.0
+            unit = "No."
+            area_param = (
+                el.LookupParameter("Actual Tread Surface Area")
+                or el.LookupParameter("Tread Surface Area")
+                or el.LookupParameter("Area")
+            )
+            if area_param and area_param.HasValue:
+                try:
+                    area_val = area_param.AsDouble() * FT2_TO_M2
+                    if area_val > 0:
+                        qty = area_val
+                        unit = "m²"
+                except:
+                    pass
+
+            cmt = ""
+            if el_type:
+                tc = el_type.LookupParameter("Type Comments")
+                if tc and tc.HasValue:
+                    cmt = tc.AsString() or ""
+            cmt = _clean_comment(name, cmt)
+
+            bucket = "internal"
+            if _is_external_function(fv):
+                bucket = "external"
+
+            grouped = internal if bucket == "internal" else external
+            if name not in grouped:
+                grouped[name] = {
+                    "qty": qty,
+                    "rate": rate,
+                    "unit": unit,
+                    "comment": cmt
+                }
+            else:
+                grouped[name]["qty"] += qty
+                if grouped[name]["rate"] == 0.0 and rate:
+                    grouped[name]["rate"] = rate
+                if cmt and not grouped[name].get("comment"):
+                    grouped[name]["comment"] = cmt
+
+        except:
+            pass
+
+    return internal, external
+
+# ------------------------------------------------------------------------------
+# External works collectors (Parking / Planting / Site Works etc.)
+# ------------------------------------------------------------------------------
+def _collect_elements_by_categories(doc, bic_list, default_unit="No."):
+    """
+    Group instances from multiple BuiltInCategories by type name.
+    Returns { name: {qty, unit, rate, comment} }.
+    - qty increments by 1 per instance
+    - unit defaults to "No."
+    - rate from Cost
+    - comment from Type Comments
+    """
+    if not isinstance(bic_list, (list, tuple)):
+        bic_list = [bic_list]
+
+    grouped = {}
+
+    for bic in bic_list:
+        if bic is None:
+            continue
+        try:
+            elems = (
+                DB.FilteredElementCollector(doc)
+                .OfCategory(bic)
+                .WhereElementIsNotElementType()
+                .ToElements()
+            )
+        except:
+            elems = []
+
+        for el in elems:
+            try:
+                el_type = doc.GetElement(el.GetTypeId()) if el.GetTypeId() else None
+
+                name = None
+                if el_type:
+                    p_name = el_type.get_Parameter(DB.BuiltInParameter.SYMBOL_NAME_PARAM)
+                    if p_name and p_name.HasValue:
+                        name = p_name.AsString()
+                if not name:
+                    p_ft = el.get_Parameter(DB.BuiltInParameter.ELEM_FAMILY_AND_TYPE_PARAM)
+                    if p_ft and p_ft.HasValue:
+                        name = p_ft.AsValueString()
+                if not name:
+                    name = getattr(el, "Name", None) or (el.Category.Name if el.Category else "Item")
+
+                rate = _get_cost(el_type) or _get_cost(el)
+
+                cmt = ""
+                if el_type:
+                    tc = el_type.LookupParameter("Type Comments")
+                    if tc and tc.HasValue:
+                        cmt = tc.AsString() or ""
+                cmt = _clean_comment(name, cmt)
+
+                if name not in grouped:
+                    grouped[name] = {
+                        "qty": 0.0,
+                        "rate": rate,
+                        "unit": default_unit,
+                        "comment": cmt
+                    }
+                grouped[name]["qty"] += 1.0
+                if grouped[name]["rate"] == 0.0 and rate:
+                    grouped[name]["rate"] = rate
+                if cmt and not grouped[name].get("comment"):
+                    grouped[name]["comment"] = cmt
+
+            except:
+                pass
+
+    return grouped
+
+def _gather_parking_items(doc):
+    """
+    Parking-related stuff: bays, bollards, markings, signs, etc.
+    We'll include a few likely categories.
+    """
+    safe_bics = [
+        DB.BuiltInCategory.OST_Parking,
+        DB.BuiltInCategory.OST_ParkingComponents
+        if hasattr(DB.BuiltInCategory, "OST_ParkingComponents") else None,
+        DB.BuiltInCategory.OST_Site,
+        DB.BuiltInCategory.OST_SpecialityEquipment,
+    ]
+    return _collect_elements_by_categories(doc, safe_bics, default_unit="No.")
+
+def _gather_planting_items(doc):
+    """
+    Planting / trees / shrubs.
+    """
+    bic_list = [DB.BuiltInCategory.OST_Planting]
+    return _collect_elements_by_categories(doc, bic_list, default_unit="No.")
+
+def _gather_site_items(doc):
+    """
+    General site furniture, lighting poles, signs, benches, etc.
+    We include:
+    - OST_Site
+    - OST_SpecialityEquipment
+    - OST_LightingFixtures (street lights if modeled as lighting fixtures)
+    - OST_GenericModel (catch-all for site furniture)
+    """
+    safe_bics = [
+        DB.BuiltInCategory.OST_Site,
+        DB.BuiltInCategory.OST_SpecialityEquipment,
+        DB.BuiltInCategory.OST_LightingFixtures,
+        DB.BuiltInCategory.OST_GenericModel,
+    ]
+    return _collect_elements_by_categories(doc, safe_bics, default_unit="No.")
+
+# ------------------------------------------------------------------------------
+# Generic writer for grouped dicts
+# ------------------------------------------------------------------------------
+def _dump_manual_group(cat_name, grouped, ctx):
+    """
+    Writes a category block (cat_name) using pre-grouped dict items:
+      grouped[name] = {qty, rate, unit, comment}
+    Updates ctx row counters, subtotals etc.
+    """
+    if not grouped:
+        return
+
+    ws           = ctx["ws"]
+    row          = ctx["row"]
+    cat_counter  = ctx["cat_counter"]
+    cat_subtotal = ctx["cat_subtotals"]
+
+    ws.write(row, 0, str(cat_counter), fmt_section)
+    ws.write(row, 1, cat_name.upper(), fmt_section)
+    row += 1
+    cat_counter += 1
+    ctx["order"].append(cat_name)
+
+    if cat_name in CATEGORY_DESCRIPTIONS:
+        ws.write(row, 1, CATEGORY_DESCRIPTIONS[cat_name], fmt_description)
+        row += 1
+
+    first_item_row = row
+    item_idx = 0
+    for name, data in grouped.items():
+        ws.write(row, 0, _item_label(item_idx), fmt_normal)
+        ws.write(row, 1, name, fmt_normal)
+        ws.write(row, 2, data["unit"], fmt_normal)
+        ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
+        ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
+
+        ws.write_formula(
+            row, 5,
+            "={}*{}".format(
+                xl_rowcol_to_cell(row, 3),
+                xl_rowcol_to_cell(row, 4)
+            ),
+            fmt_money
+        )
+        row += 1
+        item_idx += 1
+
+        if data.get("comment"):
+            ws.write(row, 1, data["comment"], fmt_italic)
+            row += 1
+
+    last_item_row = row - 1
+    ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
+    ws.write_formula(
+        row, 5,
+        "=SUM(F{}:F{})".format(first_item_row + 1, last_item_row + 1),
+        fmt_money
+    )
+    cat_subtotal[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
+    row += 2
+
+    ctx["row"]         = row
+    ctx["cat_counter"] = cat_counter
+
+# ------------------------------------------------------------------------------
 # MAIN
 # ------------------------------------------------------------------------------
 skipped = 0
 
-# 1. Process INTERNAL / MEP categories (CATEGORY_ORDER)
+# 0. Gather internal/external groups for Floors, Walls, Stairs
+internal_floors, external_floors = _gather_floors_by_function(revit.doc)
+internal_walls,  external_walls  = _gather_walls_by_function(revit.doc)
+internal_stairs, external_stairs = _gather_stairs_by_function(revit.doc)
+
+_dump_manual_group("Internal Floors", internal_floors, sheets[BILL1_NAME])
+_dump_manual_group("External Floors", external_floors, sheets[BILL3_NAME])
+
+_dump_manual_group("Internal Walls", internal_walls,   sheets[BILL1_NAME])
+_dump_manual_group("External Walls",  external_walls,   sheets[BILL3_NAME])
+
+_dump_manual_group("Internal Stairs", internal_stairs, sheets[BILL1_NAME])
+_dump_manual_group("External Stairs", external_stairs, sheets[BILL3_NAME])
+
+# 1. Process CATEGORY_ORDER (remaining categories)
 for cat_name in CATEGORY_ORDER:
+    if cat_name in (
+        "Internal Floors", "External Floors",
+        "Internal Walls",  "External Walls",
+        "Internal Stairs", "External Stairs"
+    ):
+        continue
+
     bill_name = _bill_for(cat_name)
     ctx = sheets[bill_name]
     ws = ctx["ws"]
@@ -820,11 +1350,11 @@ for cat_name in CATEGORY_ORDER:
 
     # ----- SPECIAL: Cut and Fill -----
     if cat_name == "Cut and Fill":
-        total_cut_m3 = 0.0
+        total_cut_m3  = 0.0
         total_fill_m3 = 0.0
 
         sc_cut, sc_fill = _read_cut_fill_from_schedule_cells(revit.doc)
-        total_cut_m3 += sc_cut
+        total_cut_m3  += sc_cut
         total_fill_m3 += sc_fill
 
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
@@ -835,26 +1365,24 @@ for cat_name in CATEGORY_ORDER:
                 if hasattr(Arch, "GradedRegion"):
                     graded_elems = list(
                         DB.FilteredElementCollector(revit.doc)
-                        .OfClass(Arch.GradedRegion)
-                        .ToElements()
+                        .OfClass(Arch.GradedRegion).ToElements()
                     )
             except Exception:
                 graded_elems = []
             for g in graded_elems:
                 c, f = _cutfill_from_elem(g)
-                total_cut_m3 += c
+                total_cut_m3  += c
                 total_fill_m3 += f
 
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
             topo_elems = list(
                 DB.FilteredElementCollector(revit.doc)
                 .OfCategory(DB.BuiltInCategory.OST_Topography)
-                .WhereElementIsNotElementType()
-                .ToElements()
+                .WhereElementIsNotElementType().ToElements()
             )
             for t in topo_elems:
                 c, f = _cutfill_from_elem(t)
-                total_cut_m3 += c
+                total_cut_m3  += c
                 total_fill_m3 += f
 
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
@@ -862,7 +1390,7 @@ for cat_name in CATEGORY_ORDER:
                 try:
                     c, f = _cutfill_from_elem(e)
                     if c > 0 or f > 0:
-                        total_cut_m3 += c
+                        total_cut_m3  += c
                         total_fill_m3 += f
                 except:
                     pass
@@ -871,8 +1399,7 @@ for cat_name in CATEGORY_ORDER:
             pad_elems = list(
                 DB.FilteredElementCollector(revit.doc)
                 .OfCategory(DB.BuiltInCategory.OST_BuildingPad)
-                .WhereElementIsNotElementType()
-                .ToElements()
+                .WhereElementIsNotElementType().ToElements()
             )
             pad_excav_m3 = 0.0
             for p in pad_elems:
@@ -944,14 +1471,20 @@ for cat_name in CATEGORY_ORDER:
                 "=SUM(F{}:F{})".format(first_item_row + 1, last_item_row + 1),
                 fmt_money
             )
-            ctx["cat_subtotals"][cat_name.upper()] = xl_rowcol_to_cell(row, 5)
+            cat_subtotals[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
             row += 2
 
         ctx["row"] = row
         ctx["cat_counter"] = cat_counter
         continue
 
-    # ----- Default collector for normal Revit categories -----
+    # ----- Default collector for standard Revit categories -----
+    if bic is VIRTUAL_EXTERNAL:
+        # handled later (external works sections)
+        ctx["row"] = row
+        ctx["cat_counter"] = cat_counter
+        continue
+
     if isinstance(bic, list):
         elements = []
         for sub in bic:
@@ -986,32 +1519,21 @@ for cat_name in CATEGORY_ORDER:
             if not name:
                 name = getattr(el, "Name", None) or (el.Category.Name if el.Category else "Item")
 
-            def _get_cost(o):
-                if not o:
-                    return 0.0
-                try:
-                    cp = o.LookupParameter(PARAM_COST)
-                    if cp and cp.HasValue:
-                        return float(cp.AsDouble())
-                except:
-                    pass
-                return 0.0
-
             rate = _get_cost(el_type) or _get_cost(el)
 
             qty = 1.0
             unit = "No."
 
-            if cat_name == "Block Work in Walls":
+            if cat_name in ("Block Work in Walls",):
                 prm = el.get_Parameter(DB.BuiltInParameter.HOST_AREA_COMPUTED) or el.LookupParameter("Area")
                 qty = prm.AsDouble() * FT2_TO_M2 if (prm and prm.HasValue) else 0.0
                 unit = "m²"
 
-            elif cat_name in ("Doors", "Windows"):
+            elif cat_name in ("Doors","Windows"):
                 qty = 1
                 unit = "No."
 
-            elif cat_name in ("Wall and Floor Finishes", "Roofs", "Ceilings"):
+            elif cat_name in ("Wall and Floor Finishes","Roofs","Ceilings"):
                 prm = el.LookupParameter("Area")
                 if prm and prm.HasValue:
                     qty = prm.AsDouble() * FT2_TO_M2
@@ -1030,11 +1552,11 @@ for cat_name in CATEGORY_ORDER:
                     unit = "m"
 
             elif cat_name == "Structural Columns":
-                mat_prm = el.LookupParameter("Structural Material")
+                mat_prm  = el.LookupParameter("Structural Material")
                 mat_elem = revit.doc.GetElement(mat_prm.AsElementId()) if mat_prm else None
                 low = (
                     (mat_elem.Name if mat_elem else "") + " " +
-                    (getattr(mat_elem, "MaterialClass", "") if mat_elem else "")
+                    (getattr(mat_elem,"MaterialClass","") if mat_elem else "")
                 ).lower()
 
                 vol_prm = (
@@ -1050,26 +1572,24 @@ for cat_name in CATEGORY_ORDER:
 
                 if "concrete" in low:
                     if vol_prm and vol_prm.HasValue:
-                        qty = vol_prm.AsDouble() * FT3_TO_M3
+                        qty  = vol_prm.AsDouble() * FT3_TO_M3
                         unit = "m³"
                     elif len_prm and len_prm.HasValue:
-                        qty = len_prm.AsDouble() * FT_TO_M
+                        qty  = len_prm.AsDouble() * FT_TO_M
                         unit = "m"
-
                 elif ("steel" in low) or ("metal" in low):
                     if len_prm and len_prm.HasValue:
-                        qty = len_prm.AsDouble() * FT_TO_M
+                        qty  = len_prm.AsDouble() * FT_TO_M
                         unit = "m"
                     elif vol_prm and vol_prm.HasValue:
-                        qty = vol_prm.AsDouble() * FT3_TO_M3
+                        qty  = vol_prm.AsDouble() * FT3_TO_M3
                         unit = "m³"
-
                 else:
-                    if vol_prm and vol_prm.HasValue and vol_prm.AsDouble() > 0:
-                        qty = vol_prm.AsDouble() * FT3_TO_M3
+                    if vol_prm and vol_prm.HasValue and vol_prm.AsDouble()>0:
+                        qty  = vol_prm.AsDouble() * FT3_TO_M3
                         unit = "m³"
                     elif len_prm and len_prm.HasValue:
-                        qty = len_prm.AsDouble() * FT_TO_M
+                        qty  = len_prm.AsDouble() * FT_TO_M
                         unit = "m"
 
             comment = ""
@@ -1077,9 +1597,7 @@ for cat_name in CATEGORY_ORDER:
                 tc = el_type.LookupParameter("Type Comments")
                 if tc and tc.HasValue:
                     comment = tc.AsString() or ""
-
-            if _is_noise(comment) or comment.strip().lower() == (name or "").strip().lower():
-                comment = ""
+            comment = _clean_comment(name, comment)
 
             if name not in grouped:
                 grouped[name] = {
@@ -1142,51 +1660,97 @@ for cat_name in CATEGORY_ORDER:
         else:
             ws.write(row, 5, 0, fmt_money)
 
-        ctx["cat_subtotals"][cat_name.upper()] = xl_rowcol_to_cell(row, 5)
+        cat_subtotals[cat_name.upper()] = xl_rowcol_to_cell(row, 5)
         row += 2
 
     ctx["row"] = row
     ctx["cat_counter"] = cat_counter
 
-# 2. Process EXTERNAL WORKS (virtual placeholders, no Revit take-off yet)
+# 2. Process EXTERNAL_WORKS_ORDER with real model data for Parking / Planting / Site Works etc.
 for ext_cat in EXTERNAL_WORKS_ORDER:
-    bill_name = _bill_for(ext_cat)  # should route to BILL3_NAME
+    if ext_cat in ("External Floors", "External Walls", "External Stairs"):
+        continue
+
+    bill_name = _bill_for(ext_cat)
     ctx = sheets[bill_name]
     ws = ctx["ws"]
     row = ctx["row"]
     cat_counter = ctx["cat_counter"]
     cat_subtotals = ctx["cat_subtotals"]
 
-    # we just output the section heading, description, and leave blank line items
+    if CATEGORY_MAP.get(ext_cat) is not VIRTUAL_EXTERNAL:
+        continue
+
+    if ext_cat == "Parking":
+        grouped = _gather_parking_items(revit.doc)
+        default_desc = CATEGORY_DESCRIPTIONS.get("Parking", "")
+        fallback_label = "Parking works - see site drawings / spec"
+
+    elif ext_cat == "Planting":
+        grouped = _gather_planting_items(revit.doc)
+        default_desc = CATEGORY_DESCRIPTIONS.get("Planting", "")
+        fallback_label = "Planting works - see site drawings / spec"
+
+    elif ext_cat == "Site Works":
+        grouped = _gather_site_items(revit.doc)
+        default_desc = CATEGORY_DESCRIPTIONS.get("Site Works", "")
+        fallback_label = "Site works - see site drawings / spec"
+
+    elif ext_cat in ("Paving", "Drainage", "Fencing"):
+        grouped = {}
+        default_desc = CATEGORY_DESCRIPTIONS.get(ext_cat, "")
+        fallback_label = ext_cat + " works - see site drawings / spec"
+
+    else:
+        grouped = {}
+        default_desc = CATEGORY_DESCRIPTIONS.get(ext_cat, "")
+        fallback_label = ext_cat + " works - see site drawings / spec"
+
+    # fallback placeholder = unit "Item"
+    if not grouped:
+        grouped = {
+            fallback_label: {
+                "qty": 1.0,
+                "rate": 0.0,
+                "unit": "Item",  # <-- keep placeholder as Item
+                "comment": ""
+            }
+        }
+
     ws.write(row, 0, str(cat_counter), fmt_section)
     ws.write(row, 1, ext_cat.upper(), fmt_section)
     row += 1
     cat_counter += 1
     ctx["order"].append(ext_cat)
 
-    if ext_cat in CATEGORY_DESCRIPTIONS:
-        ws.write(row, 1, CATEGORY_DESCRIPTIONS[ext_cat], fmt_description)
+    if default_desc:
+        ws.write(row, 1, default_desc, fmt_description)
         row += 1
 
     first_item_row = row
-    # placeholder line A for QS to fill
-    ws.write(row, 0, _item_label(0), fmt_normal)
-    ws.write(row, 1, ext_cat + " works - see site drawings / spec", fmt_normal)
-    ws.write(row, 2, "Item", fmt_normal)
-    ws.write(row, 3, 1, fmt_normal)
-    ws.write(row, 4, 0, fmt_money)
-    ws.write_formula(
-        row, 5,
-        "={}*{}".format(
-            xl_rowcol_to_cell(row, 3),
-            xl_rowcol_to_cell(row, 4)
-        ),
-        fmt_money
-    )
-    row += 1
+    item_idx = 0
+    for name, data in grouped.items():
+        ws.write(row, 0, _item_label(item_idx), fmt_normal)
+        ws.write(row, 1, name, fmt_normal)
+        ws.write(row, 2, data["unit"], fmt_normal)
+        ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
+        ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
+        ws.write_formula(
+            row, 5,
+            "={}*{}".format(
+                xl_rowcol_to_cell(row, 3),
+                xl_rowcol_to_cell(row, 4)
+            ),
+            fmt_money
+        )
+        row += 1
+        item_idx += 1
+
+        if data.get("comment"):
+            ws.write(row, 1, data["comment"], fmt_italic)
+            row += 1
 
     last_item_row = row - 1
-
     ws.write(row, 1, ext_cat.upper() + " TO COLLECTION", fmt_section)
     ws.write_formula(
         row, 5,
@@ -1200,9 +1764,9 @@ for ext_cat in EXTERNAL_WORKS_ORDER:
     ctx["cat_counter"] = cat_counter
 
 # ------------------------------------------------------------------------------
-# Finalize each bill and build GENERAL SUMMARY
+# Finalize bills & GENERAL SUMMARY
 # ------------------------------------------------------------------------------
-ORDERED_BILLS = [BILL1_NAME, BILL2_NAME, BILL3_NAME]  # now includes EXTERNAL WORKS
+ORDERED_BILLS = [BILL1_NAME, BILL2_NAME, BILL3_NAME]
 bill_grand_refs = []
 
 for bill_name in ORDERED_BILLS:
@@ -1233,12 +1797,9 @@ summary_ws.write(1, 2, "", fmt_header)
 summary_ws.write(1, 3, "AMOUNT (ZMW)", fmt_header)
 
 row = 2
-
 summary_ws.merge_range(
-    row,
-    1,
-    row,
-    3,
+    row, 1,
+    row, 3,
     _get_project_title().upper(),
     fmt_bold
 )
@@ -1250,18 +1811,12 @@ for idx, (bill_name, ref) in enumerate(
     zip(ORDERED_BILLS, bill_grand_refs),
     start=1
 ):
-    # label tail = text after " - " if present, uppercased
     if " - " in bill_name:
         label_tail = bill_name.split(" - ", 1)[-1].upper()
     else:
         label_tail = bill_name.upper()
 
-    summary_ws.write(
-        row,
-        1,
-        "BILL No. {}: {}".format(idx, label_tail),
-        fmt_text
-    )
+    summary_ws.write(row, 1, "BILL No. {}: {}".format(idx, label_tail), fmt_text)
     summary_ws.write(row, 2, CURRENCY_SYM, fmt_text)
     summary_ws.write_formula(row, 3, "=" + ref, fmt_money_right)
     row += 1
@@ -1270,10 +1825,10 @@ sub1_row = row
 summary_ws.write_blank(row, 0, None, fmt_text)
 summary_ws.write(row, 1, "Sub total 1", fmt_bold)
 summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
+
 if bill_grand_refs:
     summary_ws.write_formula(
-        row,
-        3,
+        row, 3,
         "=SUM({})".format(",".join(bill_grand_refs)),
         fmt_money_right
     )
@@ -1292,10 +1847,8 @@ disc_text = (
 disc_top = row
 disc_bottom = row + 5
 summary_ws.merge_range(
-    disc_top,
-    1,
-    disc_bottom,
-    1,
+    disc_top, 1,
+    disc_bottom, 1,
     disc_text,
     fmt_wrap
 )
@@ -1310,8 +1863,7 @@ summary_ws.write_blank(row, 0, None, fmt_text)
 summary_ws.write(row, 1, "Sub total 2", fmt_bold)
 summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
 summary_ws.write_formula(
-    row,
-    3,
+    row, 3,
     "={}*(1-{})".format(
         xl_rowcol_to_cell(sub1_row, 3),
         discount_cell
@@ -1322,15 +1874,13 @@ row += 1
 
 CONTINGENCY_RATE = 0.05
 summary_ws.write(
-    row,
-    1,
+    row, 1,
     "Allow for contingencies @ {}%".format(int(CONTINGENCY_RATE * 100)),
     fmt_text
 )
 summary_ws.write_blank(row, 2, None, fmt_text)
 summary_ws.write_formula(
-    row,
-    3,
+    row, 3,
     "={}*{}".format(
         xl_rowcol_to_cell(sub2_row, 3),
         CONTINGENCY_RATE
@@ -1345,8 +1895,7 @@ summary_ws.write_blank(row, 0, None, fmt_text)
 summary_ws.write(row, 1, "Sub total 3", fmt_bold)
 summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
 summary_ws.write_formula(
-    row,
-    3,
+    row, 3,
     "={}+{}".format(
         xl_rowcol_to_cell(sub2_row, 3),
         xl_rowcol_to_cell(contingency_row, 3)
@@ -1356,8 +1905,7 @@ summary_ws.write_formula(
 row += 1
 
 summary_ws.write(
-    row,
-    1,
+    row, 1,
     "Add VAT OR TOT, whichever is applicable",
     fmt_text
 )
@@ -1366,15 +1914,13 @@ summary_ws.write(row, 3, "Inclusive", fmt_text)
 row += 1
 
 summary_ws.write(
-    row,
-    1,
+    row, 1,
     "GRAND TOTAL CARRIED TO FORM OF TENDER",
     fmt_bold
 )
 summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
 summary_ws.write_formula(
-    row,
-    3,
+    row, 3,
     "={}".format(xl_rowcol_to_cell(sub3_row, 3)),
     fmt_money_right
 )
@@ -1393,29 +1939,25 @@ while row < sig_top_row_0based:
     row += 1
 
 summary_ws.write(
-    row,
-    1,
+    row, 1,
     "Signature of Contractor .................................................................",
     fmt_text
 )
 row += 1
 summary_ws.write(
-    row,
-    1,
+    row, 1,
     "Name of Firm: ..............................................................................",
     fmt_text
 )
 row += 1
 summary_ws.write(
-    row,
-    1,
+    row, 1,
     "Address: ...................................................................................",
     fmt_text
 )
 row += 1
 summary_ws.write(
-    row,
-    1,
+    row, 1,
     "Date: ......................................................................................",
     fmt_text
 )
