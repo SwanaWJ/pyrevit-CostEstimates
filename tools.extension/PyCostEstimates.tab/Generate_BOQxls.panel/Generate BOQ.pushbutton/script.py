@@ -26,9 +26,13 @@ TAB_COLORS = {
     "COVER":   "#A6A6A6",
     "BILL1":   "#4472C4",
     "BILL2":   "#C00000",
+    "BILL3":   "#FFD966",   # EXTERNAL WORKS (yellow tab)
     "SUMMARY": "#70AD47",
 }
 
+# NOTE:
+# We've split the internal category list (model-measured stuff) from external works.
+# CATEGORY_ORDER drives BILL 1 & BILL 2 only.
 CATEGORY_ORDER = [
     "Cut and Fill",
     "Structural Foundations",
@@ -36,6 +40,7 @@ CATEGORY_ORDER = [
     "Structural Columns",
     "Structural Framing",
     "Structural Rebar",
+    "Ceilings",
     "Roofs",
     "Windows",
     "Doors",
@@ -44,12 +49,23 @@ CATEGORY_ORDER = [
     "Painting",
     "Wall and Floor Finishes",
     "Furniture",
+
+]
+
+# New: EXTERNAL WORKS categories (these will live on their own sheet)
+EXTERNAL_WORKS_ORDER = [
+    "Parking",
+    "Paving",
+    "Drainage",
+    "Fencing",
 ]
 
 VIRTUAL_PAINT = object()
+VIRTUAL_EXTERNAL = object()  # signal group that isn't coming from Revit categories
 
 CATEGORY_MAP = {
-    "Cut and Fill":            DB.BuiltInCategory.OST_Topography,  # we also handle GradedRegion by CLASS
+    # INTERNAL / ARCH / STRUCT / MEP
+    "Cut and Fill":            DB.BuiltInCategory.OST_Topography,  # + GradedRegion logic
     "Structural Foundations":  DB.BuiltInCategory.OST_StructuralFoundation,
     "Block Work in Walls":     DB.BuiltInCategory.OST_Walls,
     "Structural Columns":      DB.BuiltInCategory.OST_StructuralColumns,
@@ -58,6 +74,7 @@ CATEGORY_MAP = {
     "Roofs":                   DB.BuiltInCategory.OST_Roofs,
     "Windows":                 DB.BuiltInCategory.OST_Windows,
     "Doors":                   DB.BuiltInCategory.OST_Doors,
+
     "Electrical": [
         DB.BuiltInCategory.OST_Conduit,
         DB.BuiltInCategory.OST_LightingFixtures,
@@ -71,16 +88,26 @@ CATEGORY_MAP = {
         DB.BuiltInCategory.OST_PipeFitting,
         DB.BuiltInCategory.OST_PipeAccessory,
     ],
-    "Painting": VIRTUAL_PAINT,
+
+    "Painting":                VIRTUAL_PAINT,
     "Wall and Floor Finishes": DB.BuiltInCategory.OST_GenericModel,
     "Furniture": [
         DB.BuiltInCategory.OST_Furniture,
         DB.BuiltInCategory.OST_FurnitureSystems,
     ],
-    "Ceilings": DB.BuiltInCategory.OST_Ceilings,
+    "Ceilings":                DB.BuiltInCategory.OST_Ceilings,
+
+    # EXTERNAL WORKS (virtual placeholders for now)
+    "Parking":   VIRTUAL_EXTERNAL,
+    "Paving":    VIRTUAL_EXTERNAL,
+    "Drainage":  VIRTUAL_EXTERNAL,
+    "Fencing":   VIRTUAL_EXTERNAL,
 }
 
-_missing = [c for c in CATEGORY_ORDER if c not in CATEGORY_MAP]
+# ensure everything in CATEGORY_ORDER and EXTERNAL_WORKS_ORDER exists in CATEGORY_MAP
+_missing_internal = [c for c in CATEGORY_ORDER if c not in CATEGORY_MAP]
+_missing_external = [c for c in EXTERNAL_WORKS_ORDER if c not in CATEGORY_MAP]
+_missing = _missing_internal + _missing_external
 if _missing:
     from pyrevit import forms
     forms.alert("Missing in CATEGORY_MAP:\n\n- " + "\n- ".join(_missing),
@@ -88,49 +115,84 @@ if _missing:
     raise SystemExit
 
 CATEGORY_DESCRIPTIONS = {
+    # INTERNAL WORKS / STRUCTURE / MEP
     "Cut and Fill": (
         "Bulk earthworks operations including excavation (cut) and embankment (fill), "
-        "measured from Revit Topography / Graded Regions, or estimated from Building Pads if no graded region exists."
+        "measured from Revit Topography / Graded Regions, or estimated from Building Pads "
+        "if no graded region exists."
     ),
     "Block Work in Walls": (
-        "Concrete block walls, load-bearing or cavity, plastered both sides and painted to BS 8000-3 masonry workmanship standards, "
-        "including all mortar, bed-joint reinforcement, movement provision and finishing to BS 5628-2/-3 quality."
+        "Concrete block walls, load-bearing or cavity, plastered both sides and painted to "
+        "BS 8000-3 masonry workmanship standards, including all mortar, bed-joint "
+        "reinforcement, movement provision and finishing to BS 5628-2/-3 quality."
     ),
     "Doors": (
-        "Timber or engineered doors with hardwood frames, architraves, ironmongery, seals and painting; installed and fitted as per BS 8214."
+        "Timber or engineered doors with hardwood frames, architraves, ironmongery, seals "
+        "and painting; installed and fitted as per BS 8214."
     ),
     "Windows": (
-        "Aluminium sliding or casement windows with glazing, mosquito nets, stays, handles and fixings; installed per BS 6262 (glazing) and BS 6375."
+        "Aluminium sliding or casement windows with glazing, mosquito nets, stays, handles "
+        "and fixings; installed per BS 6262 (glazing) and BS 6375."
     ),
     "Structural Foundations": (
-        "Mass or reinforced concrete footings, hardcore bedding, DPM and formwork, conforming to BS 8000 (earthworks) and BS 8110 (concrete)."
+        "Mass or reinforced concrete footings, hardcore bedding, DPM and formwork, "
+        "conforming to BS 8000 (earthworks) and BS 8110 (concrete)."
     ),
     "Structural Framing": (
-        "Mild steel beams and trusses, welded or bolted, treated with primer/paint to BS 5493 and fabricated per BS 5950."
+        "Mild steel beams and trusses, welded or bolted, treated with primer/paint to "
+        "BS 5493 and fabricated per BS 5950."
     ),
     "Structural Columns": (
-        "Concrete/steel columns with starter bars, ties and shuttering; concrete to spec per BS 8110-1, steel primed per BS 5493."
+        "Concrete/steel columns with starter bars, ties and shuttering; concrete to spec "
+        "per BS 8110-1, steel primed per BS 5493."
     ),
     "Structural Rebar": (
-        "High-yield deformed steel bars (BS 4449 B500B), cut, bent, fixed and supported with chairs/spacers, placed per BS 8666 & BS 8110-1."
+        "High-yield deformed steel bars (BS 4449 B500B), cut, bent, fixed and supported "
+        "with chairs/spacers, placed per BS 8666 & BS 8110-1."
     ),
     "Roofs": (
-        "0.5 mm IBR/IT4 pre-painted roof sheeting fixed to purlins with screws, complete with ridge capping, insulation and flashings, per BS 5534 & BS 8217."
+        "0.5 mm IBR/IT4 pre-painted roof sheeting fixed to purlins with screws, complete "
+        "with ridge capping, insulation and flashings, per BS 5534 & BS 8217."
     ),
     "Ceilings": (
-        "Particleboard or PVC tongue-and-groove ceilings, fixed or suspended per BS 5306 and manufacturer instructions."
+        "Particleboard or PVC tongue-and-groove ceilings, fixed or suspended per BS 5306 "
+        "and manufacturer instructions."
     ),
     "Wall and Floor Finishes": (
-        "Tiling and screed finishes and plaster/paint to walls, following BS 5385 (tiling), BS 8203 (screed) and BS 8000 finishing workmanship standards."
+        "Tiling and screed finishes and plaster/paint to walls, following BS 5385 (tiling), "
+        "BS 8203 (screed) and BS 8000 finishing workmanship standards."
     ),
     "Plumbing": (
-        "Sanitary appliances (WC pans, cisterns, basins, sinks, urinals) per BS 6465-3, with associated pipework, fittings, joints, valves, traps and accessories per BS 5572 sanitary drainage."
+        "Sanitary appliances (WC pans, cisterns, basins, sinks, urinals) per BS 6465-3, "
+        "with associated pipework, fittings, joints, valves, traps and accessories per "
+        "BS 5572 sanitary drainage."
     ),
     "Electrical": (
-        "Steel conduits per BS 4568-1, armoured cables/junction boxes per SANS 1507/BS 7671, with lighting fixtures and switchgear as specified."
+        "Steel conduits per BS 4568-1, armoured cables/junction boxes per SANS 1507/BS 7671, "
+        "with lighting fixtures and switchgear as specified."
     ),
     "Painting": (
-        "Measured areas from the Revit Paint tool on wall faces (all sides), grouped by material. Rates use the material 'Cost' if present."
+        "Measured areas from the Revit Paint tool on wall faces (all sides), grouped by "
+        "material. Rates use the material 'Cost' if present."
+    ),
+
+    # EXTERNAL WORKS descriptions
+    "Parking": (
+        "External parking areas including formation preparation, sub-base, basecourse "
+        "and final wearing course (asphalt / concrete block paving), line marking, "
+        "edging and any associated kerbs."
+    ),
+    "Paving": (
+        "Walkways and paved circulation areas using concrete blocks / pavers on sand "
+        "bedding, including compacted sub-base, edge restraints and jointing sand."
+    ),
+    "Drainage": (
+        "Surface water and site drainage including open drains, culverts, manholes, "
+        "catchpits, gullies and pipework laid to falls, including bedding and surround."
+    ),
+    "Fencing": (
+        "Site perimeter fencing including posts, rails, mesh / palisade panels, "
+        "gates and associated excavation and concrete setting of posts."
     ),
 }
 
@@ -175,7 +237,7 @@ fmt_percent     = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1
 fmt_money_right = wb.add_format({'font_name': font, 'font_size': 12, 'border': 1, 'num_format': '#,##0.00', 'align': 'right'})
 fmt_noborder    = wb.add_format({'font_name': font, 'font_size': 12})
 
-# NEW: centered non-bordered cover text (for "FOR THE" and "AT ...")
+# centered no-border for cover page text
 fmt_text_center = wb.add_format({
     'font_name': font,
     'font_size': 12,
@@ -184,7 +246,7 @@ fmt_text_center = wb.add_format({
 })
 
 # ------------------------------------------------------------------------------
-# Title/helpers
+# Helpers: Project Title / Address
 # ------------------------------------------------------------------------------
 def _get_project_title():
     pi = revit.doc.ProjectInformation
@@ -241,7 +303,7 @@ def _item_label(idx):
     return string.ascii_uppercase[idx] if idx < 26 else str(idx + 1)
 
 # ------------------------------------------------------------------------------
-# Sheet creation
+# Sheet setup helpers
 # ------------------------------------------------------------------------------
 def _set_portrait(ws):
     ws.set_paper(9)
@@ -251,7 +313,6 @@ def _set_portrait(ws):
 def init_bill_sheet(name):
     ws = wb.add_worksheet(name)
     _set_portrait(ws)
-
     ws.merge_range(0, 0, 0, 5, TITLE_TEXT, fmt_title)
 
     headers = ["ITEM", "DESCRIPTION", "UNIT", "QTY", "RATE (EUR)", "AMOUNT (EUR)"]
@@ -269,42 +330,32 @@ def init_cover_sheet(name):
     ws = wb.add_worksheet(name)
     _set_portrait(ws)
 
-    # column widths and row heights
     ws.set_column("B:D", 50)
     ws.set_row(8, 28)
     ws.set_row(15, 28)
     ws.set_row(19, 28)
     ws.set_row(21, 24)
 
-    # Ministry / Dept
     ws.merge_range(
         "B9:D9",
         "DEPARTMENT OF HOUSING AND INFRASTRUCTURE DEVELOPMENT",
         fmt_cover_huge
     )
-
-    # "BILL OF QUANTITIES"
     ws.merge_range(
         "B15:D15",
         "BILL OF QUANTITIES",
         fmt_cover_huge
     )
-
-    # "FOR THE" (now centered)
     ws.merge_range(
         "B17:D17",
         "FOR THE",
         fmt_text_center
     )
-
-    # Project title
     ws.merge_range(
         "B19:D19",
         TITLE_TEXT,
         fmt_cover_huge
     )
-
-    # "AT <ADDRESS>" (now centered)
     ws.merge_range(
         "B21:D21",
         "AT {}".format(_get_project_address().upper()),
@@ -314,6 +365,7 @@ def init_cover_sheet(name):
     return ws
 
 def finalize_bill_sheet(ws, row, sheet_cat_order, cat_subtotals):
+    """Write COLLECTION + GRAND TOTAL block at end of each bill sheet."""
     ws.write(row, 1, "COLLECTION", fmt_section)
     row += 1
     count = 1
@@ -329,6 +381,7 @@ def finalize_bill_sheet(ws, row, sheet_cat_order, cat_subtotals):
 
     ws.write_blank(row, 0, None, fmt_section)
     ws.write(row, 1, "GRAND TOTAL", fmt_section)
+
     if cat_subtotals:
         sum_cells = ",".join(
             cat_subtotals[k.upper()]
@@ -345,12 +398,13 @@ def _sheet_ref(name, cell_addr):
     return "'{}'!{}".format(name.replace("'", "''"), cell_addr)
 
 # ------------------------------------------------------------------------------
-# Workbook structure
+# Workbook structure (NOW WITH EXTERNAL WORKS BILL 3)
 # ------------------------------------------------------------------------------
 _USED_SHEETS = set()
 COVER_NAME   = _safe_sheet_name("COVER", _USED_SHEETS)
 BILL1_NAME   = _safe_sheet_name("BILL 1 - SUB & SUPERSTRUCTURE", _USED_SHEETS)
 BILL2_NAME   = _safe_sheet_name("BILL 2 - MEP", _USED_SHEETS)
+BILL3_NAME   = _safe_sheet_name("EXTERNAL WORKS", _USED_SHEETS)
 SUMMARY_NAME = _safe_sheet_name("GENERAL SUMMARY", _USED_SHEETS)
 
 cover_ws = init_cover_sheet(COVER_NAME)
@@ -371,24 +425,38 @@ sheets = {
         "cat_subtotals": {},
         "order": []
     },
+    BILL3_NAME: {
+        "ws": init_bill_sheet(BILL3_NAME),
+        "row": 2,
+        "cat_counter": 1,
+        "cat_subtotals": {},
+        "order": []
+    },
 }
 
 sheets[BILL1_NAME]["ws"].set_tab_color(TAB_COLORS["BILL1"])
 sheets[BILL2_NAME]["ws"].set_tab_color(TAB_COLORS["BILL2"])
+sheets[BILL3_NAME]["ws"].set_tab_color(TAB_COLORS["BILL3"])  # yellow tab
 
+# Which bill each category belongs to
 BILL_FOR_CATEGORY = {
     "Electrical": BILL2_NAME,
-    "Plumbing": BILL2_NAME
+    "Plumbing":   BILL2_NAME,
+
+    # External Works categories go to BILL3_NAME:
+    "Parking":    BILL3_NAME,
+    "Paving":     BILL3_NAME,
+    "Drainage":   BILL3_NAME,
+    "Fencing":    BILL3_NAME,
 }
 def _bill_for(cat):
     return BILL_FOR_CATEGORY.get(cat, BILL1_NAME)
 
 # ------------------------------------------------------------------------------
-# Painting helper
+# Painting helper (unchanged)
 # ------------------------------------------------------------------------------
 def _gather_wall_painting(doc):
     grouped = {}
-
     def _add(material_name, rate, area_ft2):
         key = "Paint - {}".format(material_name or "Paint")
         qty_m2 = float(area_ft2) * FT2_TO_M2
@@ -419,11 +487,9 @@ def _gather_wall_painting(doc):
             if mid == DB.ElementId.InvalidElementId:
                 continue
             mat = doc.GetElement(mid)
-            _add(
-                mat.Name if mat else "Paint",
-                _rate_from_material(mat),
-                f.Area
-            )
+            _add(mat.Name if mat else "Paint",
+                 _rate_from_material(mat),
+                 f.Area)
 
     walls = (
         DB.FilteredElementCollector(doc)
@@ -439,7 +505,6 @@ def _gather_wall_painting(doc):
     for wall in walls:
         try:
             got_any = False
-            # Try side faces first
             try:
                 for side in (DB.ShellLayerType.Interior, DB.ShellLayerType.Exterior):
                     refs = DB.HostObjectUtils.GetSideFaces(wall, side) or []
@@ -454,24 +519,20 @@ def _gather_wall_painting(doc):
                         if mid == DB.ElementId.InvalidElementId:
                             continue
                         mat = doc.GetElement(mid)
-                        _add(
-                            mat.Name if mat else "Paint",
-                            _rate_from_material(mat),
-                            face.Area
-                        )
+                        _add(mat.Name if mat else "Paint",
+                             _rate_from_material(mat),
+                             face.Area)
                         got_any = True
             except:
                 pass
-
             if got_any:
                 continue
 
-            # If Parts exist
             try:
-                pids = DB.PartUtils.GetAssociatedParts(doc, wall.Id, True, True)
+                pids = DB.PartUtils.GetAssociatedParts(revit.doc, wall.Id, True, True)
                 if pids and pids.Count > 0:
                     for pid in pids:
-                        part = doc.GetElement(pid)
+                        part = revit.doc.GetElement(pid)
                         geom = part.get_Geometry(opt)
                         if not geom:
                             continue
@@ -487,7 +548,6 @@ def _gather_wall_painting(doc):
             except:
                 pass
 
-            # Fallback: raw geometry
             try:
                 geom = wall.get_Geometry(opt)
                 if geom:
@@ -512,7 +572,7 @@ def _gather_wall_painting(doc):
     return grouped
 
 # ------------------------------------------------------------------------------
-# Earthworks helpers
+# Earthworks helpers (unchanged)
 # ------------------------------------------------------------------------------
 _num_pat = re.compile(r"[-+]?\d+(?:[.,]\d+)?")
 
@@ -527,8 +587,7 @@ def _parse_value_string_to_m3(s):
     s_low = s.lower()
     if "ft" in s_low or "ft³" in s_low or "ft^3" in s_low or "cf" in s_low:
         return val * FT3_TO_M3
-    # assume already metric m³
-    return val
+    return val  # assume metric m³
 
 def _param_to_m3(p):
     if not p or not p.HasValue:
@@ -555,7 +614,6 @@ def _cutfill_from_elem(elem):
         pass
 
     if cut <= 1e-9 and fill <= 1e-9:
-        # Try common alt param names
         for name in (
             "Cut",
             "Fill",
@@ -575,8 +633,6 @@ def _cutfill_from_elem(elem):
                         fill += v
             except:
                 pass
-
-        # Try scanning all params
         try:
             for p in elem.Parameters:
                 try:
@@ -599,8 +655,6 @@ def _read_cut_fill_from_schedule_cells(doc):
     """Read Topography schedule cell text directly and sum Cut/Fill columns."""
     cut_total = 0.0
     fill_total = 0.0
-
-    # Try to limit to topography schedules when possible
     try:
         topo_cat_id = DB.Category.GetCategory(
             doc, DB.BuiltInCategory.OST_Topography
@@ -616,7 +670,6 @@ def _read_cut_fill_from_schedule_cells(doc):
 
     for vs in scheds:
         try:
-            # Filter non-topography schedules if we can detect
             if (
                 topo_cat_id
                 and vs.Definition
@@ -635,7 +688,6 @@ def _read_cut_fill_from_schedule_cells(doc):
             col_count = body.NumberOfColumns
             header_names = []
 
-            # Capture header row captions if available
             if header and header.NumberOfRows > 0:
                 hdr_row = header.NumberOfRows - 1
                 for c in range(col_count):
@@ -645,7 +697,6 @@ def _read_cut_fill_from_schedule_cells(doc):
                         .lower()
                     )
             else:
-                # fallback
                 if body.NumberOfRows == 0:
                     continue
                 for c in range(col_count):
@@ -660,7 +711,6 @@ def _read_cut_fill_from_schedule_cells(doc):
                 if ("fill" in h and "net" not in h)
             ]
 
-            # If headers didn't work, try ScheduleDefinition fields
             if not cut_cols and not fill_cols and vs.Definition:
                 try:
                     field_names = [
@@ -678,9 +728,7 @@ def _read_cut_fill_from_schedule_cells(doc):
             if not cut_cols and not fill_cols:
                 continue
 
-            # Sum body rows
             for r in range(body.NumberOfRows):
-                # Skip total rows
                 row_is_total = False
                 for c in range(col_count):
                     txt = (body.GetCellText(r, c) or "").strip().lower()
@@ -707,6 +755,7 @@ def _read_cut_fill_from_schedule_cells(doc):
 # ------------------------------------------------------------------------------
 skipped = 0
 
+# 1. Process INTERNAL / MEP categories (CATEGORY_ORDER)
 for cat_name in CATEGORY_ORDER:
     bill_name = _bill_for(cat_name)
     ctx = sheets[bill_name]
@@ -718,10 +767,9 @@ for cat_name in CATEGORY_ORDER:
     if not bic:
         continue
 
-    # ---------------- VIRTUAL: Painting ----------------
+    # ----- VIRTUAL: Painting -----
     if bic is VIRTUAL_PAINT:
         grouped = _gather_wall_painting(revit.doc)
-
         if grouped:
             ws.write(row, 0, str(cat_counter), fmt_section)
             ws.write(row, 1, cat_name.upper(), fmt_section)
@@ -742,8 +790,7 @@ for cat_name in CATEGORY_ORDER:
                 ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
                 ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
                 ws.write_formula(
-                    row,
-                    5,
+                    row, 5,
                     "={}*{}".format(
                         xl_rowcol_to_cell(row, 3),
                         xl_rowcol_to_cell(row, 4)
@@ -757,12 +804,8 @@ for cat_name in CATEGORY_ORDER:
             ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
             if last_item_row >= first_item_row:
                 ws.write_formula(
-                    row,
-                    5,
-                    "=SUM(F{}:F{})".format(
-                        first_item_row + 1,
-                        last_item_row + 1
-                    ),
+                    row, 5,
+                    "=SUM(F{}:F{})".format(first_item_row + 1, last_item_row + 1),
                     fmt_money
                 )
             else:
@@ -775,17 +818,15 @@ for cat_name in CATEGORY_ORDER:
         ctx["cat_counter"] = cat_counter
         continue
 
-    # ---------------- REAL: Cut and Fill ----------------
+    # ----- SPECIAL: Cut and Fill -----
     if cat_name == "Cut and Fill":
         total_cut_m3 = 0.0
         total_fill_m3 = 0.0
 
-        # 0) Read schedule first
         sc_cut, sc_fill = _read_cut_fill_from_schedule_cells(revit.doc)
         total_cut_m3 += sc_cut
         total_fill_m3 += sc_fill
 
-        # 1) Graded Regions (class)
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
             graded_elems = []
             try:
@@ -799,13 +840,11 @@ for cat_name in CATEGORY_ORDER:
                     )
             except Exception:
                 graded_elems = []
-
             for g in graded_elems:
                 c, f = _cutfill_from_elem(g)
                 total_cut_m3 += c
                 total_fill_m3 += f
 
-        # 2) Topography elems
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
             topo_elems = list(
                 DB.FilteredElementCollector(revit.doc)
@@ -818,7 +857,6 @@ for cat_name in CATEGORY_ORDER:
                 total_cut_m3 += c
                 total_fill_m3 += f
 
-        # 3) Global scan for SITE_* params
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
             for e in DB.FilteredElementCollector(revit.doc).WhereElementIsNotElementType():
                 try:
@@ -829,7 +867,6 @@ for cat_name in CATEGORY_ORDER:
                 except:
                     pass
 
-        # 4) Fallback Building Pads
         if total_cut_m3 < 1e-9 and total_fill_m3 < 1e-9:
             pad_elems = list(
                 DB.FilteredElementCollector(revit.doc)
@@ -890,8 +927,7 @@ for cat_name in CATEGORY_ORDER:
                 ws.write(row, 3, data["qty"], fmt_normal)
                 ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
                 ws.write_formula(
-                    row,
-                    5,
+                    row, 5,
                     "={}*{}".format(
                         xl_rowcol_to_cell(row, 3),
                         xl_rowcol_to_cell(row, 4)
@@ -904,8 +940,7 @@ for cat_name in CATEGORY_ORDER:
             last_item_row = row - 1
             ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
             ws.write_formula(
-                row,
-                5,
+                row, 5,
                 "=SUM(F{}:F{})".format(first_item_row + 1, last_item_row + 1),
                 fmt_money
             )
@@ -916,7 +951,7 @@ for cat_name in CATEGORY_ORDER:
         ctx["cat_counter"] = cat_counter
         continue
 
-    # ---------------- Default collectors ----------------
+    # ----- Default collector for normal Revit categories -----
     if isinstance(bic, list):
         elements = []
         for sub in bic:
@@ -1082,8 +1117,7 @@ for cat_name in CATEGORY_ORDER:
             ws.write(row, 3, round(float(data["qty"]), 2), fmt_normal)
             ws.write(row, 4, round(float(data["rate"]), 2), fmt_money)
             ws.write_formula(
-                row,
-                5,
+                row, 5,
                 "={}*{}".format(
                     xl_rowcol_to_cell(row, 3),
                     xl_rowcol_to_cell(row, 4)
@@ -1101,8 +1135,7 @@ for cat_name in CATEGORY_ORDER:
         ws.write(row, 1, cat_name.upper() + " TO COLLECTION", fmt_section)
         if last_item_row >= first_item_row:
             ws.write_formula(
-                row,
-                5,
+                row, 5,
                 "=SUM(F{}:F{})".format(first_item_row + 1, last_item_row + 1),
                 fmt_money
             )
@@ -1115,10 +1148,61 @@ for cat_name in CATEGORY_ORDER:
     ctx["row"] = row
     ctx["cat_counter"] = cat_counter
 
+# 2. Process EXTERNAL WORKS (virtual placeholders, no Revit take-off yet)
+for ext_cat in EXTERNAL_WORKS_ORDER:
+    bill_name = _bill_for(ext_cat)  # should route to BILL3_NAME
+    ctx = sheets[bill_name]
+    ws = ctx["ws"]
+    row = ctx["row"]
+    cat_counter = ctx["cat_counter"]
+    cat_subtotals = ctx["cat_subtotals"]
+
+    # we just output the section heading, description, and leave blank line items
+    ws.write(row, 0, str(cat_counter), fmt_section)
+    ws.write(row, 1, ext_cat.upper(), fmt_section)
+    row += 1
+    cat_counter += 1
+    ctx["order"].append(ext_cat)
+
+    if ext_cat in CATEGORY_DESCRIPTIONS:
+        ws.write(row, 1, CATEGORY_DESCRIPTIONS[ext_cat], fmt_description)
+        row += 1
+
+    first_item_row = row
+    # placeholder line A for QS to fill
+    ws.write(row, 0, _item_label(0), fmt_normal)
+    ws.write(row, 1, ext_cat + " works - see site drawings / spec", fmt_normal)
+    ws.write(row, 2, "Item", fmt_normal)
+    ws.write(row, 3, 1, fmt_normal)
+    ws.write(row, 4, 0, fmt_money)
+    ws.write_formula(
+        row, 5,
+        "={}*{}".format(
+            xl_rowcol_to_cell(row, 3),
+            xl_rowcol_to_cell(row, 4)
+        ),
+        fmt_money
+    )
+    row += 1
+
+    last_item_row = row - 1
+
+    ws.write(row, 1, ext_cat.upper() + " TO COLLECTION", fmt_section)
+    ws.write_formula(
+        row, 5,
+        "=SUM(F{}:F{})".format(first_item_row + 1, last_item_row + 1),
+        fmt_money
+    )
+    cat_subtotals[ext_cat.upper()] = xl_rowcol_to_cell(row, 5)
+    row += 2
+
+    ctx["row"] = row
+    ctx["cat_counter"] = cat_counter
+
 # ------------------------------------------------------------------------------
-# Finalize bills & GENERAL SUMMARY
+# Finalize each bill and build GENERAL SUMMARY
 # ------------------------------------------------------------------------------
-ORDERED_BILLS = [BILL1_NAME, BILL2_NAME]
+ORDERED_BILLS = [BILL1_NAME, BILL2_NAME, BILL3_NAME]  # now includes EXTERNAL WORKS
 bill_grand_refs = []
 
 for bill_name in ORDERED_BILLS:
@@ -1166,6 +1250,7 @@ for idx, (bill_name, ref) in enumerate(
     zip(ORDERED_BILLS, bill_grand_refs),
     start=1
 ):
+    # label tail = text after " - " if present, uppercased
     if " - " in bill_name:
         label_tail = bill_name.split(" - ", 1)[-1].upper()
     else:
@@ -1185,7 +1270,6 @@ sub1_row = row
 summary_ws.write_blank(row, 0, None, fmt_text)
 summary_ws.write(row, 1, "Sub total 1", fmt_bold)
 summary_ws.write(row, 2, CURRENCY_SYM, fmt_bold)
-
 if bill_grand_refs:
     summary_ws.write_formula(
         row,
@@ -1195,7 +1279,6 @@ if bill_grand_refs:
     )
 else:
     summary_ws.write(row, 3, 0, fmt_money_right)
-
 row += 2
 
 disc_text = (
@@ -1208,7 +1291,6 @@ disc_text = (
 
 disc_top = row
 disc_bottom = row + 5
-
 summary_ws.merge_range(
     disc_top,
     1,
@@ -1217,10 +1299,8 @@ summary_ws.merge_range(
     disc_text,
     fmt_wrap
 )
-
 summary_ws.write(disc_top, 2, "%", fmt_center)
 summary_ws.write(disc_top + 1, 2, 0, fmt_percent)
-
 discount_cell = xl_rowcol_to_cell(disc_top + 1, 2)
 
 row = disc_bottom + 1
@@ -1241,7 +1321,6 @@ summary_ws.write_formula(
 row += 1
 
 CONTINGENCY_RATE = 0.05
-
 summary_ws.write(
     row,
     1,
@@ -1258,7 +1337,6 @@ summary_ws.write_formula(
     ),
     fmt_money_right
 )
-
 contingency_row = row
 row += 1
 
@@ -1349,7 +1427,6 @@ summary_ws.set_h_pagebreaks([FIRST_PAGE_LAST_ROW])
 # Close and notify
 # ------------------------------------------------------------------------------
 wb.close()
-
 MessageBox.Show(
     "BOQ export (multi-sheet) complete!\nSaved to Desktop:\n{}\nSkipped: {}".format(
         xlsx_path, skipped
